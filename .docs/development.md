@@ -49,4 +49,4 @@ npm run test:e2e
 
 `.gitignore` 排除 `.env` 及其变体（保留空值 `.env.example`）、默认 `.data/`、依赖、构建产物、VAD 生成资源、测试报告和系统杂项。
 
-若将 `ASIDE_DATA_DIR` 设在仓库内部的其他位置，需自行把该目录加入 `.gitignore`。提交前用 `git status` 检查，避免加入音频、对话、模型原始响应和数据库。当前仓库没有授予开源许可证。
+若将 `ASIDE_DATA_DIR` 设在仓库内部的其他位置，需自行把该目录加入 `.gitignore`。提交前用 `git status` 检查，避免加入音频、对话、模型原始响应和数据库。本项目采用 [Apache License 2.0](../LICENSE)，第三方依赖及其模型资源遵循各自的许可证。

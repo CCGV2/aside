@@ -8,6 +8,7 @@
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 ![Local prototype](https://img.shields.io/badge/status-local%20prototype-orange)
 
 </div>
@@ -97,3 +98,7 @@ npm run build     # 类型、模块边界检查及前端构建
 这是单用户本地原型。分析任务目前串行执行，长节目需要等待；已完成的分块会缓存，失败后可以重试。多人播客统一使用一个预设声音，人物口吻与语言跟随依赖模型表现。
 
 `.env`、上传音频、分析缓存、数据库、测试产物和生成的 VAD 资源均不进入 Git。音频分析、提问和云端语音交互会将相应内容发送给模型服务；本地 VAD 监听本身不上传音频。当前服务没有面向公网的用户认证，部署方案尚未完成。
+
+## 📄 License
+
+本项目采用 [Apache License 2.0](LICENSE)。第三方依赖及其模型资源遵循各自的许可证。
