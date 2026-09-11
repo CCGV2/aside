@@ -1,0 +1,29 @@
+{
+  "name": "aside",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "engine",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"npm run dev -w @aside/backend\" \"npm run dev -w @aside/frontend\"",
+    "build": "npm run check && npm run build -w @aside/frontend",
+    "check": "tsc --noEmit && node scripts/check-boundaries.mjs",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "demo": "node --import tsx scripts/create-demo.ts",
+    "format": "prettier --write engine backend frontend scripts tests *.json",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "concurrently": "^9.0.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,16 @@
+node_modules/
+frontend/dist/
+.data/
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+
+frontend/public/vad/
+
+# Local system / debug artifacts
+.DS_Store
+*.log
+*.tsbuildinfo
+coverage/

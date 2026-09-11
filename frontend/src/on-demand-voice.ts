@@ -1,0 +1,373 @@
+import type {
+  MicrophoneConfig,
+  VoiceLifecycleConfig,
+} from "@aside/engine/core";
+import { LocalMicrophone, type MicrophonePort } from "./microphone";
+import { LiveConnection, type LiveCallbacks } from "./live";
+export type VoiceStatus =
+  "off" | "arming" | "armed" | "connecting" | "transcribing" | "on" | "closing";
+export interface CloudPort {
+  connect(
+    source: MediaStream,
+    create: (
+      sdp: string,
+    ) => Promise<{ session: { id: string }; transport: { sdp: string } }>,
+  ): Promise<void>;
+  append(
+    type: "thinking" | "commentary" | "instructions",
+    content: string,
+    id?: string | null,
+  ): void;
+  mute(value: boolean): void;
+  input(value: boolean): void;
+  interrupt(): void;
+  close(): Promise<void>;
+}
+export interface VoiceCallbacks extends Omit<
+  LiveCallbacks,
+  "onClose" | "onUsage"
+> {
+  onSpeech(active: boolean): void;
+  onUsage?(seconds: number, sessionId: string): void;
+  onStatus(status: VoiceStatus): void;
+  onFirstQuestion(text: string): void;
+  onClose(
+    finalized: boolean,
+    seconds: number,
+    sessionId: string,
+    intentional: boolean,
+  ): void;
+}
+export interface VoiceDependencies {
+  microphone: (
+    speech: (active: boolean) => void,
+    error: (message: string) => void,
+  ) => MicrophonePort;
+  cloud: (callbacks: LiveCallbacks) => CloudPort;
+  create: (
+    sdp: string,
+  ) => Promise<{ session: { id: string }; transport: { sdp: string } }>;
+  transcribe: (audio: Blob, signal: AbortSignal) => Promise<string>;
+}
+/** Owns cloud lifecycle, separately from the durable podcast playback state. */
+export class OnDemandVoice {
+  private mic: MicrophonePort;
+  private cloud?: CloudPort;
+  private enabled = false;
+  private version = 0;
+  private questionVersion = 0;
+  private speaking = false;
+  private cold = false;
+  private connecting?: Promise<void>;
+  private closing: Promise<void> = Promise.resolve();
+  private recognition?: AbortController;
+  private graceTimer?: ReturnType<typeof setTimeout>;
+  private idleTimer?: ReturnType<typeof setTimeout>;
+  private status: VoiceStatus = "off";
+  private desiredMuted = true;
+  private working = false;
+  private outputActive = false;
+  private suppressUntilSpeechEnd = false;
+  constructor(
+    private config: VoiceLifecycleConfig,
+    private cb: VoiceCallbacks,
+    private deps: VoiceDependencies,
+  ) {
+    this.mic = deps.microphone(
+      (a) => this.speech(a),
+      (e) => this.fail(e),
+    );
+  }
+  get isCold() {
+    return this.cold;
+  }
+  get isEnabled() {
+    return this.enabled;
+  }
+  private setStatus(status: VoiceStatus) {
+    this.status = status;
+    this.cb.onStatus(status);
+  }
+  async enable() {
+    if (this.enabled) return;
+    this.enabled = true;
+    const version = this.version;
+    this.setStatus("arming");
+    try {
+      await this.mic.start();
+      if (!this.enabled || this.version !== version) {
+        this.mic.stop();
+        return;
+      }
+      this.setStatus("armed");
+    } catch (error) {
+      this.fail((error as Error).message);
+    }
+  }
+  private clearTimers() {
+    clearTimeout(this.graceTimer);
+    clearTimeout(this.idleTimer);
+  }
+  private speech(active: boolean) {
+    if (!this.enabled) return;
+    this.speaking = active;
+    if (this.suppressUntilSpeechEnd) {
+      if (!active) {
+        this.suppressUntilSpeechEnd = false;
+        this.cloud?.input(true);
+      }
+      return;
+    }
+    this.clearTimers();
+    if (active) {
+      this.questionVersion++;
+      this.recognition?.abort();
+      if (!this.cloud || this.connecting || this.cold) {
+        this.cold = true;
+        this.mic.begin();
+        this.cb.onSpeech(true);
+        void this.ensureCloud();
+      } else this.cb.onSpeech(true);
+    } else {
+      this.cb.onSpeech(false);
+      if (this.cold) void this.finishFirstQuestion();
+      else this.activity();
+    }
+  }
+  private ensureCloud(): Promise<void> {
+    if (this.connecting) return this.connecting;
+    if (this.cloud) return Promise.resolve();
+    const version = this.version;
+    const work = (async () => {
+      await this.closing;
+      if (!this.enabled || version !== this.version) return;
+      this.setStatus("connecting");
+      let sessionId = "";
+      let intentional = false;
+      const cloud = this.deps.cloud({
+        onUsage: (seconds) => this.cb.onUsage?.(seconds, sessionId),
+        onReady: () => {
+          if (this.cloud !== cloud || version !== this.version) return;
+          cloud.mute(true);
+          this.cb.onReady();
+        },
+        onOutput: (active) => {
+          if (this.cloud !== cloud || version !== this.version || this.cold)
+            return;
+          this.outputActive = active;
+          this.activity();
+          this.cb.onOutput(active);
+        },
+        onTranscript: (role, text) => {
+          if (this.cloud !== cloud || version !== this.version || this.cold)
+            return;
+          this.activity();
+          this.cb.onTranscript(role, text);
+        },
+        onDelegation: (id) => {
+          if (this.working) return;
+          if (this.cloud !== cloud || version !== this.version || this.cold)
+            return;
+          this.activity();
+          this.cb.onDelegation(id);
+        },
+        onError: (message) => {
+          if (this.cloud === cloud) this.cb.onError(message);
+        },
+        onClose: (finalized, seconds) => {
+          const wasCurrent = this.cloud === cloud;
+          intentional = !wasCurrent || !this.enabled;
+          this.cb.onClose(finalized, seconds, sessionId, intentional);
+          if (wasCurrent) {
+            this.cloud = undefined;
+            if (this.enabled) {
+              this.cold = false;
+              this.recognition?.abort();
+              this.mic.discard();
+              this.clearTimers();
+              this.setStatus("armed");
+            }
+          }
+        },
+      });
+      this.cloud = cloud;
+      await cloud.connect(this.mic.stream, async (sdp) => {
+        const result = await this.deps.create(sdp);
+        sessionId = result.session.id;
+        return result;
+      });
+      if (!this.enabled || version !== this.version || this.cloud !== cloud) {
+        await cloud.close();
+        return;
+      }
+      if (!this.cold) this.cloud?.input(!this.suppressUntilSpeechEnd);
+      this.setStatus(this.cold ? "transcribing" : "on");
+    })();
+    this.connecting = work;
+    void work
+      .catch((error) => {
+        if (version === this.version && this.enabled) {
+          this.cb.onError((error as Error).message);
+          this.endCloud();
+        }
+      })
+      .finally(() => {
+        if (this.connecting === work) this.connecting = undefined;
+      });
+    return work;
+  }
+  private async finishFirstQuestion() {
+    const version = this.version,
+      revision = this.questionVersion;
+    const abort = new AbortController();
+    this.recognition?.abort();
+    this.recognition = abort;
+    this.setStatus("transcribing");
+    try {
+      const audio = this.mic.snapshot();
+      const text = await this.deps.transcribe(audio, abort.signal);
+      await this.ensureCloud();
+      if (
+        abort.signal.aborted ||
+        !this.enabled ||
+        version !== this.version ||
+        revision !== this.questionVersion ||
+        this.speaking ||
+        !this.cloud
+      )
+        return;
+      if (!text.trim()) throw Error("没有识别到完整问题，请再说一次");
+      this.mic.discard();
+      this.cold = false;
+      this.setStatus("on");
+      this.cloud.append(
+        "thinking",
+        `Latest actual user utterance (transcribed user data): ${text}`,
+      );
+      this.cloud.append(
+        "instructions",
+        "The backend is handling the first question. Wait for its answer; do not delegate it again. Reply in the language of the actual user utterance, ignoring the language of metadata and prior assistant replies. Preserve the language of the backend answer. Handle subsequent live follow-ups normally.",
+      );
+      this.cloud.input(true);
+      this.cloud.mute(this.desiredMuted);
+      this.activity();
+      this.cb.onFirstQuestion(text.trim());
+    } catch (error) {
+      if (
+        !abort.signal.aborted &&
+        version === this.version &&
+        this.enabled &&
+        revision === this.questionVersion
+      ) {
+        this.cb.onError((error as Error).message);
+        this.endCloud();
+      }
+    } finally {
+      if (this.recognition === abort) this.recognition = undefined;
+    }
+  }
+  setWorking(value: boolean) {
+    this.working = value;
+    this.activity();
+  }
+  activity() {
+    clearTimeout(this.idleTimer);
+    if (
+      this.cloud &&
+      !this.cold &&
+      !this.speaking &&
+      !this.working &&
+      !this.outputActive
+    )
+      this.idleTimer = setTimeout(() => {
+        this.endCloud();
+      }, this.config.idleCloseMs);
+  }
+  cancelCapture() {
+    this.questionVersion++;
+    this.recognition?.abort();
+    this.mic.discard();
+    if (this.cold) {
+      this.suppressUntilSpeechEnd = this.speaking;
+      this.cold = false;
+      this.cloud?.input(!this.suppressUntilSpeechEnd);
+    }
+  }
+  playbackResumed() {
+    this.cancelCapture();
+    this.cold = false;
+    this.questionVersion++;
+    this.recognition?.abort();
+    this.mic.discard();
+    this.mute(true);
+    this.clearTimers();
+    if (this.cloud || this.connecting)
+      this.graceTimer = setTimeout(() => this.endCloud(), this.config.graceMs);
+  }
+  private endCloud() {
+    this.clearTimers();
+    this.questionVersion++;
+    this.recognition?.abort();
+    this.mic.discard();
+    this.cold = false;
+    this.outputActive = false;
+    const cloud = this.cloud;
+    this.cloud = undefined;
+    this.connecting = undefined;
+    this.version++;
+    if (cloud) {
+      this.setStatus("closing");
+      const close = cloud.close();
+      this.closing = close;
+      void close.finally(() => {
+        if (this.enabled && !this.cloud && !this.connecting)
+          this.setStatus("armed");
+      });
+    } else if (this.enabled) this.setStatus("armed");
+  }
+  append(
+    type: "thinking" | "commentary" | "instructions",
+    content: string,
+    id: string | null = null,
+  ) {
+    this.cloud?.append(type, content, id);
+  }
+  mute(value: boolean) {
+    this.desiredMuted = value;
+    this.cloud?.mute(value || this.cold);
+  }
+  interrupt() {
+    this.outputActive = false;
+    this.clearTimers();
+    this.cloud?.interrupt();
+  }
+  async close() {
+    this.enabled = false;
+    this.endCloud();
+    this.mic.stop();
+    this.setStatus("off");
+    await this.closing;
+  }
+  private fail(message: string) {
+    this.cb.onError(message);
+    void this.close();
+  }
+}
+export function createOnDemandVoice(
+  microphone: MicrophoneConfig,
+  config: VoiceLifecycleConfig,
+  cb: VoiceCallbacks,
+  remote: Pick<VoiceDependencies, "create" | "transcribe">,
+) {
+  return new OnDemandVoice(config, cb, {
+    ...remote,
+    microphone: (speech, error) =>
+      new LocalMicrophone(
+        microphone,
+        Math.max(config.preRollMs, microphone.minSpeechMs + 80),
+        speech,
+        error,
+      ),
+    cloud: (callbacks) => new LiveConnection(callbacks),
+  });
+}

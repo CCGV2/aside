@@ -1,0 +1,329 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Store } from "../backend/src/store.js";
+import { createApp } from "../backend/src/app.js";
+test("persistent progress, byte ranges, API validation and credential boundary", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-test-"));
+  const store = new Store(root);
+  store.put({
+    id: "test",
+    title: "test",
+    createdAt: "now",
+    durationMs: 10000,
+    status: "ready",
+    stage: "ready",
+    progress: 1,
+  });
+  await mkdir(store.dir("test"));
+  await writeFile(
+    join(store.dir("test"), "original"),
+    Buffer.from("0123456789"),
+  );
+  const app = createApp(store);
+  try {
+    assert.equal(
+      (await app.inject("/api/health")).json().liveConfigured,
+      false,
+    );
+    const range = await app.inject({
+      url: "/api/episodes/test/audio",
+      headers: { range: "bytes=2-5" },
+    });
+    assert.equal(range.statusCode, 206);
+    assert.equal(range.body, "2345");
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/episodes/test/audio",
+          headers: { range: "bytes=100-" },
+        })
+      ).statusCode,
+      416,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/episodes/test/checkpoint",
+          method: "PUT",
+          payload: { positionMs: -1, history: [] },
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/episodes/test/checkpoint",
+          method: "PUT",
+          payload: { positionMs: 4500, resumeMs: 1000, history: [] },
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal(
+      (await app.inject("/api/episodes/test/checkpoint")).json().resumeMs,
+      1000,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/episodes",
+          headers: { origin: "https://evil.example" },
+        })
+      ).statusCode,
+      403,
+    );
+    const again = new Store(root);
+    assert.equal(again.checkpoint("test").positionMs, 4500);
+    again.close();
+  } finally {
+    await app.close();
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("real multipart upload persists playable WAV and blocks analysis without key", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-upload-"));
+  const store = new Store(root);
+  const app = createApp(store);
+  const wav = Buffer.alloc(44 + 4800);
+  wav.write("RIFF");
+  wav.writeUInt32LE(wav.length - 8, 4);
+  wav.write("WAVEfmt ", 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(24000, 24);
+  wav.writeUInt32LE(48000, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36);
+  wav.writeUInt32LE(4800, 40);
+  const boundary = "aside-test-boundary";
+  const multipart = (bytes: Buffer) =>
+    Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="test.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
+      ),
+      bytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+  try {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/episodes",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipart(wav),
+    });
+    assert.equal(res.statusCode, 201, res.body);
+    const id = res.json().id;
+    assert.equal(store.get(id)?.status, "blocked");
+    const audio = await app.inject(`/api/episodes/${id}/audio`);
+    assert.equal(audio.headers["content-type"], "audio/wav");
+    assert.deepEqual(audio.rawPayload, wav);
+    const bad = await app.inject({
+      method: "POST",
+      url: "/api/episodes",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipart(Buffer.from("not audio")),
+    });
+    assert.equal(bad.statusCode, 400);
+    assert.equal(store.list().length, 1);
+  } finally {
+    await app.close();
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("voice usage accumulates per session and repeated final events do not double count", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-usage-"));
+  const store = new Store(root);
+  try {
+    store.recordUsage("e", "session-a", 20, false);
+    store.recordUsage("e", "session-a", 25, true);
+    store.recordUsage("e", "session-a", 25, true);
+    store.recordUsage("e", "session-a", 10, false);
+    store.recordUsage("e", "session-b", 30, true);
+    const usage = store.usage("e");
+    assert.equal(usage.length, 2);
+    assert.equal(
+      usage.reduce((n, r) => n + Number(r.seconds), 0),
+      55,
+    );
+    assert.equal(usage[0].finalized, 1);
+  } finally {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("first-question upload uses transient WAV; new Live request forwards conversation history", async () => {
+  const { Provider } = await import("../backend/src/provider.js");
+  let received: Buffer | undefined, history: unknown;
+  class TestProvider extends Provider {
+    override async transcribeQuestion(audio: Buffer) {
+      received = audio;
+      return "完整问题";
+    }
+    override async createLive(
+      _sdp: string,
+      _analysis: import("@aside/engine/core").Analysis,
+      _at: number,
+      h: import("@aside/engine/core").Turn[] = [],
+    ) {
+      history = h;
+      return { session: { id: "test-session" }, transport: { sdp: "answer" } };
+    }
+  }
+  const root = await mkdtemp(join(tmpdir(), "aside-first-"));
+  const store = new Store(root);
+  store.put({
+    id: "test",
+    title: "test",
+    createdAt: "now",
+    durationMs: 10000,
+    status: "ready",
+    stage: "ready",
+    progress: 1,
+    analysis: {
+      version: "v1",
+      source: "demo",
+      passages: [],
+      anchors: [],
+      speakers: [],
+      summary: "",
+      hostStyle: "",
+      voice: "feminine",
+      voiceReason: "test",
+    },
+  });
+  await mkdir(store.dir("test"));
+  const app = createApp(
+    store,
+    new TestProvider("test-placeholder-not-a-credential"),
+  );
+  try {
+    const wav = Buffer.alloc(48);
+    wav.write("RIFF");
+    wav.write("WAVE", 8);
+    const boundary = "first-question";
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="question.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
+      ),
+      wav,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/episodes/test/transcribe-question",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+    assert.equal(r.statusCode, 200, r.body);
+    assert.equal(r.json().text, "完整问题");
+    assert.deepEqual(received, wav);
+    const h = [
+      { role: "user", text: "前面的问题" },
+      { role: "assistant", text: "前面的解释" },
+    ];
+    const live = await app.inject({
+      method: "POST",
+      url: "/api/episodes/test/live",
+      payload: { sdp: "offer", atMs: 1000, history: h },
+    });
+    assert.equal(live.statusCode, 200, live.body);
+    assert.deepEqual(history, h);
+  } finally {
+    await app.close();
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("question endpoint streams progress and terminal success or error, preserving JSON clients", async () => {
+  const { Provider } = await import("../backend/src/provider.js");
+  let fail = false;
+  class ProgressProvider extends Provider {
+    override async answer(
+      ...args: Parameters<InstanceType<typeof Provider>["answer"]>
+    ) {
+      args[3]?.("working");
+      await new Promise((r) => setTimeout(r, 10));
+      args[3]?.("searching");
+      if (fail) throw Error("lookup failed");
+      return {
+        revision: args[1].revision,
+        answer: "English answer",
+        action: "answer" as const,
+        sources: [],
+        tools: ["search_podcast"],
+      };
+    }
+  }
+  const root = await mkdtemp(join(tmpdir(), "aside-progress-"));
+  const store = new Store(root);
+  store.put({
+    id: "progress",
+    title: "test",
+    createdAt: "now",
+    durationMs: 1000,
+    status: "ready",
+    stage: "ready",
+    progress: 1,
+    analysis: {
+      version: "1",
+      passages: [],
+      anchors: [],
+      summary: "",
+      hostStyle: "",
+      speakers: [],
+      voice: "masculine",
+      voiceReason: "test",
+      source: "provider",
+    },
+  });
+  await mkdir(store.dir("progress"));
+  const app = createApp(store, new ProgressProvider("test-placeholder"));
+  const payload = {
+    revision: 7,
+    atMs: 0,
+    history: [{ role: "user", text: "What is this?" }],
+  };
+  try {
+    const normal = await app.inject({
+      method: "POST",
+      url: "/api/episodes/progress/question",
+      payload,
+    });
+    assert.equal(normal.json().answer, "English answer");
+    for (const failure of [false, true]) {
+      fail = failure;
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/episodes/progress/question",
+        payload,
+        headers: { accept: "application/x-ndjson" },
+      });
+      assert.equal(response.statusCode, 200);
+      const events = response.body
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      assert.deepEqual(
+        events.slice(0, 2).map((e) => e.phase),
+        ["working", "searching"],
+      );
+      assert.equal(events.at(-1).type, failure ? "error" : "result");
+    }
+  } finally {
+    await app.close();
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

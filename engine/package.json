@@ -1,0 +1,10 @@
+{
+  "name": "@aside/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./server": "./src/server.ts"
+  }
+}

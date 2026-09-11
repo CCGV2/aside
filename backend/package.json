@@ -1,0 +1,20 @@
+{
+  "name": "@aside/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./contracts": "./src/contracts.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../.env src/index.ts"
+  },
+  "dependencies": {
+    "@aside/engine": "*",
+    "@fastify/multipart": "^9.0.0",
+    "fastify": "^5.0.0",
+    "jsonrepair": "^3.15.0",
+    "openai": "^6.0.0",
+    "zod": "^4.0.0"
+  }
+}
