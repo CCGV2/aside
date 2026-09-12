@@ -36,7 +36,9 @@ npm run test:e2e
 
 演示生成脚本使用 macOS 的 `say -v Tingting`；非 macOS 环境需要另行准备等价演示数据。Playwright 配置没有自动启动 webServer。
 
-测试覆盖 Transcript 跟随、聊天滚动、折叠布局、空格快捷键、麦克风生命周期、续播与本地 VAD。模型接口使用测试替身，VAD 用真实浏览器模型和音频验证。测试通过不代表真实模型的回答速度、人物口吻、语言跟随或各种麦克风环境都已验证。
+`tests/listening-session.test.ts` 用可控时钟与设备替身直接验证组合时序；`question-service.test.ts` 验证工具流程；`contracts.test.ts` 验证 JSON/NDJSON 校验；`provider.test.ts` 验证 SDK 格式映射。
+
+浏览器测试覆盖 Transcript 跟随、聊天滚动、折叠布局、空格快捷键、麦克风生命周期、续播与本地 VAD，以及手动按住/释放、权限延迟、拒绝权限后的播放、倒计时取消与偏好保存。WebRTC loopback 使用本地合成输出验证自动/手动问答的音频结束计时、延迟采样和旧事件拦截。模型接口使用测试替身，VAD 用真实浏览器模型和音频验证。测试通过不代表真实模型的回答速度、人物口吻、语言跟随或各种麦克风环境都已验证。
 
 ## 排查入口
 

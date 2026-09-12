@@ -42,19 +42,34 @@ test("progress is delivered before final result, even across byte boundaries", a
     (p) => phases.push(p),
   );
   const bytes = new TextEncoder().encode(
-    JSON.stringify({ type: "progress", phase: "searching" }) + "\n",
+    JSON.stringify({ type: "progress", phase: "searching", revision: 1 }) +
+      "\n",
   );
   sink.enqueue(bytes.slice(0, 8));
   sink.enqueue(bytes.slice(8));
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(phases, ["searching"]);
   const end = new TextEncoder().encode(
-    JSON.stringify({ type: "result", result: { answer: "中文或English" } }) +
-      "\n",
+    JSON.stringify({
+      type: "result",
+      result: {
+        answer: "中文或English",
+        revision: 1,
+        action: "answer",
+        sources: [],
+        tools: [],
+      },
+    }) + "\n",
   );
   for (const b of end) sink.enqueue(new Uint8Array([b]));
   sink.close();
-  assert.deepEqual(await result, { answer: "中文或English" });
+  assert.deepEqual(await result, {
+    answer: "中文或English",
+    revision: 1,
+    action: "answer",
+    sources: [],
+    tools: [],
+  });
 });
 test("stream errors and missing final result fail instead of silently completing", async () => {
   const headers = { "Content-Type": "application/x-ndjson" };
@@ -67,7 +82,9 @@ test("stream errors and missing final result fail instead of silently completing
   );
   await assert.rejects(
     readQuestion(
-      new Response('{"type":"progress","phase":"working"}\n', { headers }),
+      new Response('{"type":"progress","phase":"working","revision":1}\n', {
+        headers,
+      }),
       () => {},
     ),
     /中断/,

@@ -286,179 +286,281 @@ test("local AudioWorklet is armed without cloud; first speech captures WAV and s
   ).toBe("ended");
 });
 
-test("native WebRTC loopback hands off first question and closes after resume without stopping local mic", async ({
-  page,
-}) => {
-  let creates = 0,
-    questions = 0;
-  const usage: any[] = [];
-  let capturedHistory: any;
-  await page.route("**/api/health", async (route) => {
-    const r = await route.fetch();
-    await route.fulfill({
-      json: {
-        ...(await r.json()),
-        liveConfigured: true,
-        microphone: {
-          threshold: 0.025,
-          minSpeechMs: 120,
-          silenceMs: 160,
-          vadEnabled: false,
+for (const manual of [false, true]) {
+  test(`native WebRTC ${manual ? "manual" : "automatic"} voice answers, waits and resumes safely`, async ({
+    page,
+  }) => {
+    let creates = 0,
+      questions = 0,
+      transcriptions = 0;
+    const usage: any[] = [];
+    let capturedHistory: any;
+    await page.route("**/api/health", async (route) => {
+      const r = await route.fetch();
+      await route.fulfill({
+        json: {
+          ...(await r.json()),
+          liveConfigured: true,
+          microphone: {
+            threshold: 0.025,
+            minSpeechMs: 120,
+            silenceMs: 160,
+            vadEnabled: false,
+          },
+          voiceLifecycle: { preRollMs: 750, graceMs: 100, idleCloseMs: 60000 },
         },
-        voiceLifecycle: { preRollMs: 750, graceMs: 100, idleCloseMs: 60000 },
-      },
+      });
     });
-  });
-  await page.route("**/api/episodes/*/transcribe-question", (route) =>
-    route.fulfill({ json: { text: "为什么散步会带来灵感？" } }),
-  );
-  await page.route("**/api/episodes/*/question", async (route) => {
-    questions++;
-    const q = route.request().postDataJSON();
-    capturedHistory = q.history;
-    await route.fulfill({
-      json: {
-        revision: q.revision,
-        action: "answer",
-        answer: "散步给思考留下一点空间。",
-        sources: [],
-        tools: ["search_podcast"],
-      },
+    await page.route("**/api/episodes/*/transcribe-question", (route) => {
+      transcriptions++;
+      return route.fulfill({
+        json: {
+          text:
+            transcriptions === 1 ? "为什么散步会带来灵感？" : "Okay, go on.",
+        },
+      });
     });
-  });
-  await page.route("**/api/episodes/*/usage", async (route) => {
-    usage.push(route.request().postDataJSON());
-    await route.fulfill({ json: { ok: true } });
-  });
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
-      value: async () => {
-        const ctx = new AudioContext(),
-          gain = ctx.createGain(),
-          osc = ctx.createOscillator(),
-          dest = ctx.createMediaStreamDestination();
-        gain.gain.value = 0;
-        osc.connect(gain).connect(dest);
-        osc.start();
-        await ctx.resume();
-        Object.assign(window, {
-          asideTestMic: { gain, ctx, stream: dest.stream },
-        });
-        return dest.stream;
-      },
+    await page.route("**/api/episodes/*/question", async (route) => {
+      questions++;
+      const q = route.request().postDataJSON();
+      capturedHistory = q.history;
+      await route.fulfill({
+        json: {
+          revision: q.revision,
+          action: "answer",
+          answer: "散步给思考留下一点空间。",
+          sources: [],
+          tools: ["search_podcast"],
+        },
+      });
     });
-  });
-  await page.route("**/api/episodes/*/live", async (route) => {
-    creates++;
-    const { sdp } = route.request().postDataJSON();
-    const answer = await page.evaluate(async (offer) => {
-      const peer = new RTCPeerConnection();
-      Object.assign(window, { asideLoopback: peer, asideCloudEvents: [] });
-      peer.ondatachannel = (e) => {
-        const channel = e.channel;
-        Object.assign(window, { asideCloudChannel: channel });
-        channel.onopen = () =>
-          channel.send(JSON.stringify({ type: "session.started" }));
-        channel.onmessage = (message) => {
-          const event = JSON.parse(message.data);
-          (window as any).asideCloudEvents.push(event);
-          if (event.type === "session.commentary.append")
-            channel.send(
-              JSON.stringify({
-                type: "session.output_transcript.delta",
-                delta: event.content,
-              }),
-            );
-          if (event.type === "session.close")
-            channel.send(
-              JSON.stringify({ type: "session.closed", usage: { seconds: 4 } }),
-            );
+    await page.route("**/api/episodes/*/usage", async (route) => {
+      usage.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+        value: async () => {
+          const ctx = new AudioContext(),
+            gain = ctx.createGain(),
+            osc = ctx.createOscillator(),
+            dest = ctx.createMediaStreamDestination();
+          gain.gain.value = 0;
+          osc.connect(gain).connect(dest);
+          osc.start();
+          await ctx.resume();
+          Object.assign(window, {
+            asideTestMic: { gain, ctx, stream: dest.stream },
+          });
+          return dest.stream;
+        },
+      });
+    });
+    await page.route("**/api/episodes/*/live", async (route) => {
+      creates++;
+      const { sdp } = route.request().postDataJSON();
+      const answer = await page.evaluate(async (offer) => {
+        const peer = new RTCPeerConnection();
+        Object.assign(window, { asideLoopback: peer, asideCloudEvents: [] });
+        peer.ondatachannel = (e) => {
+          const channel = e.channel;
+          Object.assign(window, { asideCloudChannel: channel });
+          channel.onopen = () =>
+            channel.send(JSON.stringify({ type: "session.started" }));
+          channel.onmessage = (message) => {
+            const event = JSON.parse(message.data);
+            (window as any).asideCloudEvents.push(event);
+            if (event.type === "session.commentary.append")
+              channel.send(
+                JSON.stringify({
+                  type: "session.output_transcript.delta",
+                  delta: event.content,
+                }),
+              );
+            if (event.type === "session.close")
+              channel.send(
+                JSON.stringify({
+                  type: "session.closed",
+                  usage: { seconds: 4 },
+                }),
+              );
+          };
         };
-      };
-      await peer.setRemoteDescription({ type: "offer", sdp: offer });
-      await peer.setLocalDescription(await peer.createAnswer());
-      if (peer.iceGatheringState !== "complete")
-        await new Promise<void>((resolve) =>
-          peer.addEventListener("icegatheringstatechange", () => {
-            if (peer.iceGatheringState === "complete") resolve();
+        await peer.setRemoteDescription({ type: "offer", sdp: offer });
+        const context = new AudioContext();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const destination = context.createMediaStreamDestination();
+        gain.gain.value = 0;
+        oscillator.connect(gain).connect(destination);
+        oscillator.start();
+        await context.resume();
+        peer.addTrack(
+          destination.stream.getAudioTracks()[0],
+          destination.stream,
+        );
+        Object.assign(window, {
+          asideAnswerGain: gain,
+          asideAnswerContext: context,
+        });
+        await peer.setLocalDescription(await peer.createAnswer());
+        if (peer.iceGatheringState !== "complete")
+          await new Promise<void>((resolve) =>
+            peer.addEventListener("icegatheringstatechange", () => {
+              if (peer.iceGatheringState === "complete") resolve();
+            }),
+          );
+        return peer.localDescription!.sdp;
+      }, sdp);
+      await route.fulfill({
+        json: {
+          session: { id: "loopback-test-session" },
+          transport: { sdp: answer },
+        },
+      });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: /给思考留一点空间/ }).click();
+    if (manual) await page.getByLabel("插话方式").selectOption("manual");
+    await page.getByRole("button", { name: "播放", exact: true }).click();
+    if (!manual)
+      await expect(
+        page.getByRole("status").filter({ hasText: "● 本地监听" }),
+      ).toBeVisible();
+    expect(creates).toBe(0);
+    if (manual) {
+      await page.getByRole("button", { name: "按住说话", exact: true }).focus();
+      await page.keyboard.down("Space");
+    } else {
+      await page.evaluate(() => {
+        (window as any).asideTestMic.gain.gain.value = 0.15;
+      });
+    }
+    await expect.poll(() => creates).toBe(1);
+    await page.waitForTimeout(250);
+    if (manual) await page.keyboard.up("Space");
+    else
+      await page.evaluate(() => {
+        (window as any).asideTestMic.gain.gain.value = 0;
+      });
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: manual ? "可继续追问" : "● 语音交流中" }),
+    ).toBeVisible({
+      timeout: 15000,
+    });
+    await expect.poll(() => questions).toBe(1);
+    expect(capturedHistory.at(-1).text).toBe("为什么散步会带来灵感？");
+    await expect(page.locator(".message.assistant").last()).toContainText(
+      "散步给思考留下一点空间。",
+    );
+    // Emit real loopback audio: the countdown starts after audible output ends.
+    await page.waitForTimeout(1100);
+    await page.evaluate(() => {
+      (window as any).asideAnswerGain.gain.value = 0.15;
+    });
+    await expect(page.locator(".status")).toContainText("正在回答");
+    await page.getByRole("button", { name: /开发观察/ }).click();
+    await expect(page.locator(".debug")).toContainText('"connection": "cold"');
+    await expect(page.locator(".followup-window")).not.toContainText(
+      "秒后继续播放",
+    );
+    await page.evaluate(() => {
+      (window as any).asideAnswerGain.gain.value = 0;
+    });
+    await expect(page.locator(".followup-window")).toContainText(
+      "秒后继续播放",
+    );
+    await page.getByRole("button", { name: "先别继续" }).click();
+    await page.waitForTimeout(3200);
+    expect(
+      await page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
+    ).toBe(true);
+    // A warm-session spoken command is handled locally without another backend question.
+    if (manual) {
+      await page.getByRole("button", { name: "按住说话", exact: true }).focus();
+      await page.keyboard.down("Space");
+      await expect(
+        page.getByRole("button", { name: "按住说话", exact: true }),
+      ).toContainText("正在录音");
+      await page.keyboard.up("Space");
+    } else {
+      await page.evaluate(() => {
+        (window as any).asideTestMic.gain.gain.value = 0.15;
+      });
+      await page.waitForTimeout(250);
+      await page.evaluate(() => {
+        (window as any).asideTestMic.gain.gain.value = 0;
+        (window as any).asideCloudChannel.send(
+          JSON.stringify({
+            type: "session.input_transcript.delta",
+            delta: "Okay, go on.",
           }),
         );
-      return peer.localDescription!.sdp;
-    }, sdp);
-    await route.fulfill({
-      json: {
-        session: { id: "loopback-test-session" },
-        transport: { sdp: answer },
-      },
+      });
+    }
+    await expect(page.locator(".status")).toContainText("回到节目");
+    await page.evaluate(() => {
+      (window as any).asideCloudChannel.send(
+        JSON.stringify({
+          type: "session.output_transcript.delta",
+          delta: "过期回答不得回流",
+        }),
+      );
+      (window as any).asideCloudChannel.send(
+        JSON.stringify({
+          type: "session.delegation.created",
+          delegation: { target: "client", id: "stale-delegation" },
+        }),
+      );
+    });
+    await expect(page.getByRole("log")).not.toContainText("过期回答不得回流");
+    // Losing the cloud during an already requested continuation must not cancel playback.
+    await page.evaluate(() => {
+      (window as any).asideCloudChannel.send(
+        JSON.stringify({
+          type: "error",
+          error: { message: "模拟续播期间断线" },
+        }),
+      );
+      (window as any).asideCloudChannel.send(
+        JSON.stringify({ type: "session.closed", usage: { seconds: 4 } }),
+      );
+    });
+    await page.waitForTimeout(900);
+    expect(
+      await page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
+    ).toBe(true);
+
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: manual ? "麦克风未监听" : "● 本地监听" }),
+    ).toBeVisible();
+    await expect.poll(() => usage.length).toBe(1);
+    expect(questions).toBe(1);
+    expect(usage[0]).toMatchObject({
+      sessionId: "loopback-test-session",
+      finalized: true,
+      seconds: 4,
+    });
+    await expect
+      .poll(() =>
+        page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
+      )
+      .toBe(false);
+    expect(
+      await page.evaluate(
+        () => (window as any).asideTestMic.stream.getTracks()[0].readyState,
+      ),
+    ).toBe(manual ? "ended" : "live");
+    expect(creates).toBe(1);
+    await page.getByRole("button", { name: "暂停", exact: true }).click();
+    await page.evaluate(() => {
+      (window as any).asideLoopback.close();
+      (window as any).asideTestMic.ctx.close();
+      (window as any).asideAnswerContext.close();
     });
   });
-  await page.goto("/");
-  await page.getByRole("button", { name: /给思考留一点空间/ }).click();
-  await page.getByRole("button", { name: "播放", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "● 本地监听" }),
-  ).toBeVisible();
-  await page.waitForTimeout(200);
-  expect(creates).toBe(0);
-  await page.evaluate(() => {
-    (window as any).asideTestMic.gain.gain.value = 0.15;
-  });
-  await expect.poll(() => creates).toBe(1);
-  await page.waitForTimeout(250);
-  await page.evaluate(() => {
-    (window as any).asideTestMic.gain.gain.value = 0;
-  });
-  await expect(
-    page.getByRole("status").filter({ hasText: "● 语音交流中" }),
-  ).toBeVisible({
-    timeout: 15000,
-  });
-  await expect.poll(() => questions).toBe(1);
-  expect(capturedHistory.at(-1).text).toBe("为什么散步会带来灵感？");
-  await expect(page.locator(".message.assistant").last()).toContainText(
-    "散步给思考留下一点空间。",
-  );
-  // A warm-session spoken command is handled locally without another backend question.
-  await page.evaluate(() => {
-    (window as any).asideTestMic.gain.gain.value = 0.15;
-  });
-  await page.waitForTimeout(250);
-  await page.evaluate(() => {
-    (window as any).asideTestMic.gain.gain.value = 0;
-    (window as any).asideCloudChannel.send(
-      JSON.stringify({
-        type: "session.input_transcript.delta",
-        delta: "Okay, go on.",
-      }),
-    );
-  });
-  await expect(page.locator(".status")).toContainText("回到节目");
-  await page.waitForTimeout(900);
-  expect(
-    await page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
-  ).toBe(true);
-
-  await expect(
-    page.getByRole("status").filter({ hasText: "● 本地监听" }),
-  ).toBeVisible();
-  await expect.poll(() => usage.length).toBe(1);
-  expect(questions).toBe(1);
-  expect(usage[0]).toMatchObject({
-    sessionId: "loopback-test-session",
-    finalized: true,
-    seconds: 4,
-  });
-  expect(
-    await page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
-  ).toBe(false);
-  expect(
-    await page.evaluate(
-      () => (window as any).asideTestMic.stream.getTracks()[0].readyState,
-    ),
-  ).toBe("live");
-  await page.getByRole("button", { name: "暂停", exact: true }).click();
-  await page.evaluate(() => {
-    (window as any).asideLoopback.close();
-    (window as any).asideTestMic.ctx.close();
-  });
-});
+}

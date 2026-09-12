@@ -59,3 +59,21 @@ test("quiet confident speech passes VAD without requiring the old volume thresho
   const energyOnly = new MicrophoneBuffer(16000, config, 750);
   for (let i = 0; i < 20; i++) assert.equal(energyOnly.push(quiet), undefined);
 });
+
+test("manual capture has no pre-roll but preserves non-silent PCM while held", async () => {
+  const buffer = new MicrophoneBuffer(
+    16000,
+    { threshold: 0.025, minSpeechMs: 120, silenceMs: 650 },
+    0,
+  );
+  buffer.push(new Float32Array(1600).fill(0.9)); // Ambient sound before pressing.
+  buffer.begin();
+  buffer.push(new Float32Array(1600).fill(0.25));
+  const wav = new DataView(await buffer.snapshot().arrayBuffer());
+  assert.equal(wav.getUint32(40, true), 3200);
+  assert.equal(wav.getInt16(44, true), Math.round(0.25 * 32767));
+  assert.equal(
+    wav.getInt16(wav.byteLength - 2, true),
+    Math.round(0.25 * 32767),
+  );
+});

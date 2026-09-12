@@ -54,6 +54,7 @@ export class OnDemandVoice {
   private mic: MicrophonePort;
   private cloud?: CloudPort;
   private enabled = false;
+  private microphoneReady = false;
   private version = 0;
   private questionVersion = 0;
   private speaking = false;
@@ -72,9 +73,12 @@ export class OnDemandVoice {
     private config: VoiceLifecycleConfig,
     private cb: VoiceCallbacks,
     private deps: VoiceDependencies,
+    private manual = false,
   ) {
     this.mic = deps.microphone(
-      (a) => this.speech(a),
+      (a) => {
+        if (!this.manual) this.speech(a);
+      },
       (e) => this.fail(e),
     );
   }
@@ -99,10 +103,27 @@ export class OnDemandVoice {
         this.mic.stop();
         return;
       }
+      this.microphoneReady = true;
       this.setStatus("armed");
     } catch (error) {
       this.fail((error as Error).message);
     }
+  }
+  /** Manual capture always uses local WAV transcription, including warm follow-ups. */
+  beginManual() {
+    if (!this.manual || !this.enabled || !this.microphoneReady || this.speaking)
+      return false;
+    this.cold = true;
+    this.cloud?.input(false);
+    this.mic.discard();
+    this.speech(true);
+    return true;
+  }
+  endManual() {
+    if (this.manual && this.speaking) this.speech(false);
+  }
+  get isWarm() {
+    return !!this.cloud && !this.connecting;
   }
   private clearTimers() {
     clearTimeout(this.graceTimer);
@@ -114,7 +135,7 @@ export class OnDemandVoice {
     if (this.suppressUntilSpeechEnd) {
       if (!active) {
         this.suppressUntilSpeechEnd = false;
-        this.cloud?.input(true);
+        this.cloud?.input(!this.manual);
       }
       return;
     }
@@ -126,7 +147,7 @@ export class OnDemandVoice {
         this.cold = true;
         this.mic.begin();
         this.cb.onSpeech(true);
-        void this.ensureCloud();
+        void this.ensureCloud().catch(() => {});
       } else this.cb.onSpeech(true);
     } else {
       this.cb.onSpeech(false);
@@ -200,7 +221,8 @@ export class OnDemandVoice {
         await cloud.close();
         return;
       }
-      if (!this.cold) this.cloud?.input(!this.suppressUntilSpeechEnd);
+      if (!this.cold)
+        this.cloud?.input(!this.manual && !this.suppressUntilSpeechEnd);
       this.setStatus(this.cold ? "transcribing" : "on");
     })();
     this.connecting = work;
@@ -225,6 +247,7 @@ export class OnDemandVoice {
     this.setStatus("transcribing");
     try {
       const audio = this.mic.snapshot();
+      if (this.manual) this.mic.discard();
       const text = await this.deps.transcribe(audio, abort.signal);
       await this.ensureCloud();
       if (
@@ -248,7 +271,7 @@ export class OnDemandVoice {
         "instructions",
         "The backend is handling the first question. Wait for its answer; do not delegate it again. Reply in the language of the actual user utterance, ignoring the language of metadata and prior assistant replies. Preserve the language of the backend answer. Handle subsequent live follow-ups normally.",
       );
-      this.cloud.input(true);
+      this.cloud.input(!this.manual);
       this.cloud.mute(this.desiredMuted);
       this.activity();
       this.cb.onFirstQuestion(text.trim());
@@ -284,13 +307,14 @@ export class OnDemandVoice {
       }, this.config.idleCloseMs);
   }
   cancelCapture() {
+    if (this.manual) this.speaking = false;
     this.questionVersion++;
     this.recognition?.abort();
     this.mic.discard();
     if (this.cold) {
-      this.suppressUntilSpeechEnd = this.speaking;
+      this.suppressUntilSpeechEnd = !this.manual && this.speaking;
       this.cold = false;
-      this.cloud?.input(!this.suppressUntilSpeechEnd);
+      this.cloud?.input(!this.manual && !this.suppressUntilSpeechEnd);
     }
   }
   playbackResumed() {
@@ -343,6 +367,7 @@ export class OnDemandVoice {
   }
   async close() {
     this.enabled = false;
+    this.microphoneReady = false;
     this.endCloud();
     this.mic.stop();
     this.setStatus("off");
@@ -358,16 +383,22 @@ export function createOnDemandVoice(
   config: VoiceLifecycleConfig,
   cb: VoiceCallbacks,
   remote: Pick<VoiceDependencies, "create" | "transcribe">,
+  manual = false,
 ) {
-  return new OnDemandVoice(config, cb, {
-    ...remote,
-    microphone: (speech, error) =>
-      new LocalMicrophone(
-        microphone,
-        Math.max(config.preRollMs, microphone.minSpeechMs + 80),
-        speech,
-        error,
-      ),
-    cloud: (callbacks) => new LiveConnection(callbacks),
-  });
+  return new OnDemandVoice(
+    config,
+    cb,
+    {
+      ...remote,
+      microphone: (speech, error) =>
+        new LocalMicrophone(
+          manual ? { ...microphone, vadEnabled: false } : microphone,
+          manual ? 0 : Math.max(config.preRollMs, microphone.minSpeechMs + 80),
+          speech,
+          error,
+        ),
+      cloud: (callbacks) => new LiveConnection(callbacks),
+    },
+    manual,
+  );
 }

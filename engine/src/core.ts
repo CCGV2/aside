@@ -48,11 +48,7 @@ export interface Episode {
   error?: string;
   analysis?: Analysis;
 }
-export interface Turn {
-  id?: string;
-  role: "user" | "assistant";
-  text: string;
-}
+export type { Turn } from "./contracts.js";
 export function selectVoice(speakers: Speaker[]): {
   voice: "masculine" | "feminine";
   reason: string;

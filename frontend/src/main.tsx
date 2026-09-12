@@ -8,6 +8,18 @@ const time = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 function App() {
   const {
+    listeningMode,
+    changeListeningMode,
+    manualHeld,
+    beginManual,
+    endManual,
+    followupMs,
+    changeFollowupMs,
+    resumeSeconds,
+    resumeHeld,
+    holdResume,
+    returnContext,
+    latencies,
     episodes,
     episode,
     state,
@@ -22,25 +34,20 @@ function App() {
     events,
     sources,
     audio,
-    live,
-    stateRef,
-    historyRef,
+    seek,
+    submitQuestion,
+    metadataLoaded,
+    audioTick,
+    setPlaybackRate,
     setError,
     setDebug,
     setQuestion,
     upload,
     load,
-    interrupt,
-    dispatch,
     requestResume,
-    stopPending,
-    updateHistory,
-    ask,
-    connect,
     listeningActive,
     startListening,
     stopListening,
-    sendContext,
     retry,
   } = usePlayerController();
   const [compactEpisode, setCompactEpisode] = useState("");
@@ -61,6 +68,10 @@ function App() {
     layoutTransition.current = document.startViewTransition(() =>
       flushSync(update),
     );
+    // Skips and browser animation timeouts reject ready even when React has
+    // committed the new layout. Keep playback independent of that animation.
+    const transition = layoutTransition.current;
+    void transition.ready.catch(() => transition.skipTransition());
   }, [listeningActive, episode?.id, compactEpisode]);
 
   useEffect(() => {
@@ -93,6 +104,20 @@ function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [episode, listeningActive, startListening, stopListening]);
+
+  useEffect(() => {
+    if (!manualHeld) return;
+    const release = () => endManual();
+    const hide = () => {
+      if (document.hidden) release();
+    };
+    window.addEventListener("blur", release);
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      window.removeEventListener("blur", release);
+      document.removeEventListener("visibilitychange", hide);
+    };
+  }, [manualHeld, endManual]);
 
   const messages = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -260,16 +285,7 @@ function App() {
                   min={0}
                   max={episode.durationMs}
                   value={state.positionMs}
-                  onChange={(e) => {
-                    stopPending();
-                    live.current?.cancelCapture();
-                    live.current?.playbackResumed();
-                    audio.current?.pause();
-                    live.current?.mute(true);
-                    const at = Number(e.target.value);
-                    dispatch({ type: "seek", atMs: at });
-                    if (audio.current) audio.current.currentTime = at / 1000;
-                  }}
+                  onChange={(e) => seek(Number(e.target.value))}
                 />
                 <div className="time-row">
                   <span>{time(state.positionMs)}</span>
@@ -293,10 +309,7 @@ function App() {
                   <select
                     aria-label="播放速度"
                     defaultValue="1"
-                    onChange={(e) => {
-                      if (audio.current)
-                        audio.current.playbackRate = Number(e.target.value);
-                    }}
+                    onChange={(e) => setPlaybackRate(Number(e.target.value))}
                   >
                     <option value="0.75">0.75×</option>
                     <option value="1">1×</option>
@@ -310,20 +323,48 @@ function App() {
               key={episode.id}
               ref={audio}
               src={`/api/episodes/${episode.id}/audio`}
-              onLoadedMetadata={() => {
-                if (audio.current)
-                  audio.current.currentTime =
-                    stateRef.current.positionMs / 1000;
-              }}
-              onTimeUpdate={() => {
-                dispatch({
-                  type: "tick",
-                  atMs: (audio.current?.currentTime ?? 0) * 1000,
-                });
-                sendContext();
-              }}
+              onLoadedMetadata={metadataLoaded}
+              onTimeUpdate={audioTick}
               onEnded={stopListening}
             />
+            <div className="listening-options" aria-label="收听设置">
+              <label>
+                插话方式
+                <select
+                  aria-label="插话方式"
+                  value={listeningMode}
+                  onChange={(e) =>
+                    changeListeningMode(e.target.value as typeof listeningMode)
+                  }
+                >
+                  <option value="auto">自动插话</option>
+                  <option value="manual">按住说话</option>
+                  <option value="off">只听节目</option>
+                </select>
+              </label>
+              <label>
+                回答后继续
+                <select
+                  aria-label="回答后继续"
+                  value={followupMs}
+                  onChange={(e) => changeFollowupMs(Number(e.target.value))}
+                >
+                  {![0, 3000, 8000].includes(followupMs) && (
+                    <option value={followupMs}>跟随服务设置</option>
+                  )}
+                  <option value="3000">等 3 秒</option>
+                  <option value="8000">等 8 秒</option>
+                  <option value="0">手动继续</option>
+                </select>
+              </label>
+              <small>
+                {listeningMode === "auto"
+                  ? "播放时本地监听，开口即可插话"
+                  : listeningMode === "manual"
+                    ? "按住录音，松开发送；也可按住空格键操作按钮"
+                    : "麦克风关闭，仍可打字提问"}
+              </small>
+            </div>
             <div className="lower">
               <section className="transcript">
                 <Transcript
@@ -336,6 +377,11 @@ function App() {
                     <span>
                       ↶ 聊完从这里继续 · {time(state.interruption.resumeMs)}
                     </span>
+                    {returnContext && (
+                      <p className="return-context">
+                        刚才听到：{returnContext}
+                      </p>
+                    )}
                     <p>
                       {
                         episode.analysis?.anchors.find(
@@ -356,10 +402,16 @@ function App() {
                     {{
                       off: "麦克风未监听",
                       arming: "开启麦克风…",
-                      armed: "● 本地监听",
+                      armed:
+                        listeningMode === "manual"
+                          ? "按住说话 · 待命"
+                          : "● 本地监听",
                       connecting: "● 正在连接",
                       transcribing: "● 正在识别",
-                      on: "● 语音交流中",
+                      on:
+                        listeningMode === "manual"
+                          ? "按住说话 · 可继续追问"
+                          : "● 语音交流中",
                       closing: "● 本地监听",
                     }[liveStatus] ?? "麦克风未监听"}
                   </span>
@@ -380,7 +432,11 @@ function App() {
                       </p>
                       <small>
                         {configured
-                          ? "播放时自动监听，直接开口就能打断；暂停后停止监听。"
+                          ? listeningMode === "auto"
+                            ? "播放时自动监听，直接开口就能打断；暂停后停止监听。"
+                            : listeningMode === "manual"
+                              ? "按住下方按钮说话，松开后回答。"
+                              : "安心听节目，有问题也可以打字问。"
                           : "配置服务端 API key 后可语音或文字提问。"}
                       </small>
                     </div>
@@ -398,19 +454,67 @@ function App() {
                     </div>
                   )}
                 </div>
+                {state.interruption && (
+                  <div className="followup-window">
+                    <span>
+                      {resumeSeconds !== null
+                        ? `${resumeSeconds} 秒后继续播放`
+                        : resumeHeld || followupMs === 0
+                          ? "准备好了，再继续听"
+                          : busy
+                            ? "聊完再接着听"
+                            : "可以追问，或继续听"}
+                    </span>
+                    {!resumeHeld && (
+                      <button onClick={holdResume}>先别继续</button>
+                    )}
+                  </div>
+                )}
+                {listeningMode === "manual" && (
+                  <button
+                    className={`push-to-talk${manualHeld ? " recording" : ""}`}
+                    disabled={!configured || !episode.analysis}
+                    aria-label="按住说话"
+                    aria-pressed={manualHeld}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      e.currentTarget.focus();
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      void beginManual();
+                    }}
+                    onPointerUp={endManual}
+                    onPointerCancel={endManual}
+                    onLostPointerCapture={endManual}
+                    onBlur={endManual}
+                    onContextMenu={(e) => e.preventDefault()}
+                    onKeyDown={(e) => {
+                      if (
+                        (e.code === "Space" || e.code === "Enter") &&
+                        !e.repeat
+                      ) {
+                        e.preventDefault();
+                        void beginManual();
+                      }
+                    }}
+                    onKeyUp={(e) => {
+                      if (e.code === "Space" || e.code === "Enter") {
+                        e.preventDefault();
+                        endManual();
+                      }
+                    }}
+                  >
+                    {manualHeld
+                      ? liveStatus === "arming"
+                        ? "开启麦克风…就绪后说话"
+                        : "正在录音 · 松开发送"
+                      : "按住说话"}
+                  </button>
+                )}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (!question.trim()) return;
-                    live.current?.cancelCapture();
-                    interrupt();
-                    dispatch({ type: "user_end" });
-                    updateHistory([
-                      ...historyRef.current,
-                      { role: "user", text: question.trim() },
-                    ]);
-                    setQuestion("");
-                    void ask();
+                    submitQuestion();
                   }}
                 >
                   <input
@@ -452,7 +556,12 @@ function App() {
             {debug && (
               <pre className="debug">
                 {JSON.stringify(
-                  { state, voiceReason: episode.analysis?.voiceReason, events },
+                  {
+                    state,
+                    voiceReason: episode.analysis?.voiceReason,
+                    responseLatencies: latencies,
+                    events,
+                  },
                   null,
                   2,
                 )}

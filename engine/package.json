@@ -5,6 +5,10 @@
   "type": "module",
   "exports": {
     "./core": "./src/core.ts",
-    "./server": "./src/server.ts"
+    "./server": "./src/server.ts",
+    "./contracts": "./src/contracts.ts"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
   }
 }

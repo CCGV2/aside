@@ -920,6 +920,73 @@ progress {
 }
 
 /* View transitions animate the existing control layout in both directions. */
+.listening-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin: 0 0 18px;
+  font-size: 13px;
+}
+.listening-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.listening-options select {
+  padding: 7px;
+  border: 1px solid #d8d6cd;
+  border-radius: 8px;
+  background: #fffdf7;
+  color: inherit;
+}
+.listening-options small {
+  color: #696d65;
+}
+.followup-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  font-size: 13px;
+}
+.followup-window button {
+  border: 1px solid #d8d6cd;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fffdf7;
+  color: inherit;
+}
+.push-to-talk {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #b6c0b0;
+  border-radius: 10px;
+  background: #edf1e8;
+  color: #324c37;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.push-to-talk.recording {
+  background: #324c37;
+  color: white;
+}
+.push-to-talk:disabled {
+  opacity: 0.5;
+}
+.return-context {
+  font-weight: 600;
+}
+.listening-options select:focus-visible,
+.push-to-talk:focus-visible,
+.followup-window button:focus-visible {
+  outline: 2px solid #324c37;
+  outline-offset: 3px;
+}
 .player-card {
   view-transition-name: podcast-player;
 }

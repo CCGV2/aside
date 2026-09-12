@@ -1,3 +1,4 @@
+import type { BackendServices } from "../backend/src/services.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
@@ -5,6 +6,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../backend/src/store.js";
 import { createApp } from "../backend/src/app.js";
+
+const unused = async (): Promise<never> => {
+  throw Error("Unexpected provider call in test");
+};
+function fakeServices(overrides: Partial<BackendServices>): BackendServices {
+  return {
+    analysis: { transcribe: unused, enrich: unused },
+    voice: { transcribeQuestion: unused, createLive: unused },
+    questions: { answer: unused },
+    ...overrides,
+  };
+}
+
 test("persistent progress, byte ranges, API validation and credential boundary", async () => {
   const root = await mkdtemp(join(tmpdir(), "aside-test-"));
   const store = new Store(root);
@@ -163,14 +177,13 @@ test("voice usage accumulates per session and repeated final events do not doubl
 });
 
 test("first-question upload uses transient WAV; new Live request forwards conversation history", async () => {
-  const { Provider } = await import("../backend/src/provider.js");
   let received: Buffer | undefined, history: unknown;
-  class TestProvider extends Provider {
-    override async transcribeQuestion(audio: Buffer) {
+  const voice: BackendServices["voice"] = {
+    async transcribeQuestion(audio: Buffer) {
       received = audio;
       return "完整问题";
-    }
-    override async createLive(
+    },
+    async createLive(
       _sdp: string,
       _analysis: import("@aside/engine/core").Analysis,
       _at: number,
@@ -178,8 +191,8 @@ test("first-question upload uses transient WAV; new Live request forwards conver
     ) {
       history = h;
       return { session: { id: "test-session" }, transport: { sdp: "answer" } };
-    }
-  }
+    },
+  };
   const root = await mkdtemp(join(tmpdir(), "aside-first-"));
   const store = new Store(root);
   store.put({
@@ -203,10 +216,7 @@ test("first-question upload uses transient WAV; new Live request forwards conver
     },
   });
   await mkdir(store.dir("test"));
-  const app = createApp(
-    store,
-    new TestProvider("test-placeholder-not-a-credential"),
-  );
+  const app = createApp(store, fakeServices({ voice }));
   try {
     const wav = Buffer.alloc(48);
     wav.write("RIFF");
@@ -247,12 +257,9 @@ test("first-question upload uses transient WAV; new Live request forwards conver
 });
 
 test("question endpoint streams progress and terminal success or error, preserving JSON clients", async () => {
-  const { Provider } = await import("../backend/src/provider.js");
   let fail = false;
-  class ProgressProvider extends Provider {
-    override async answer(
-      ...args: Parameters<InstanceType<typeof Provider>["answer"]>
-    ) {
+  const questions: BackendServices["questions"] = {
+    async answer(...args) {
       args[3]?.("working");
       await new Promise((r) => setTimeout(r, 10));
       args[3]?.("searching");
@@ -264,8 +271,8 @@ test("question endpoint streams progress and terminal success or error, preservi
         sources: [],
         tools: ["search_podcast"],
       };
-    }
-  }
+    },
+  };
   const root = await mkdtemp(join(tmpdir(), "aside-progress-"));
   const store = new Store(root);
   store.put({
@@ -289,7 +296,7 @@ test("question endpoint streams progress and terminal success or error, preservi
     },
   });
   await mkdir(store.dir("progress"));
-  const app = createApp(store, new ProgressProvider("test-placeholder"));
+  const app = createApp(store, fakeServices({ questions }));
   const payload = {
     revision: 7,
     atMs: 0,

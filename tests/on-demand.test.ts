@@ -8,7 +8,7 @@ import {
 } from "../frontend/src/on-demand-voice.js";
 import type { LiveCallbacks } from "../frontend/src/live.js";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-function setup() {
+function setup(manual = false) {
   let speech!: (a: boolean) => void;
   let callbacks!: LiveCallbacks;
   let creates = 0,
@@ -101,7 +101,7 @@ function setup() {
       return new Promise<string>((resolve) => (resolveText = resolve));
     },
   };
-  const voice = new OnDemandVoice(configs, cb, deps);
+  const voice = new OnDemandVoice(configs, cb, deps, manual);
   return {
     voice,
     speech: (a: boolean) => speech(a),
@@ -282,5 +282,51 @@ test("continuous assistant audio cannot be mistaken for idle", async () => {
   s.callbacks.onOutput(false);
   await new Promise((r) => setTimeout(r, 65));
   assert.equal(s.closed, 1);
+  await s.voice.close();
+});
+
+test("manual mode ignores ambient speech and only submits on release, including warm follow-ups", async () => {
+  const s = setup(true);
+  await s.voice.enable();
+  s.speech(true);
+  s.speech(false);
+  await tick();
+  assert.equal(s.creates, 0);
+  assert.equal(s.captures, 0);
+  assert.equal(s.voice.beginManual(), true);
+  await tick();
+  s.ready();
+  s.speech(false); // Silence while holding does not submit.
+  assert.equal(s.signal, undefined);
+  s.voice.endManual();
+  s.text("第一个手动问题");
+  await tick();
+  assert.deepEqual(s.questions, ["第一个手动问题"]);
+  assert.equal(s.events.includes("input:true"), false);
+  assert.equal(s.voice.isWarm, true);
+  assert.equal(s.voice.beginManual(), true);
+  s.voice.endManual();
+  s.text("手动追问");
+  await tick();
+  assert.deepEqual(s.questions, ["第一个手动问题", "手动追问"]);
+  assert.equal(s.creates, 1);
+  assert.equal(s.events.includes("input:true"), false);
+  await s.voice.close();
+});
+
+test("manual resume cancels capture and rejects a late release or transcription", async () => {
+  const s = setup(true);
+  assert.equal(s.voice.beginManual(), false);
+  await s.voice.enable();
+  s.voice.beginManual();
+  await tick();
+  s.ready();
+  s.voice.endManual();
+  s.voice.cancelCapture();
+  s.voice.endManual();
+  s.text("已经取消的问题");
+  await tick();
+  assert.deepEqual(s.questions, []);
+  assert.equal(s.events.includes("input:true"), false);
   await s.voice.close();
 });

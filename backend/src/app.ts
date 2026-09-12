@@ -9,14 +9,19 @@ import { z } from "zod";
 import type { Episode } from "@aside/engine/core";
 import { questionSchema, liveSchema, checkpointSchema } from "./contracts.js";
 import { Store } from "./store.js";
-import { Provider } from "./provider.js";
+import type { BackendServices } from "./services.js";
+import {
+  questionEventSchema,
+  questionResultSchema,
+  type QuestionEvent,
+} from "@aside/engine/contracts";
 import { Jobs, probeAudio } from "./jobs.js";
 import { readMicrophoneConfig, readVoiceLifecycleConfig } from "./config.js";
-export function createApp(store: Store, provider?: Provider) {
+export function createApp(store: Store, services?: BackendServices) {
   const microphone = readMicrophoneConfig();
   const voiceLifecycle = readVoiceLifecycleConfig();
   const app = Fastify({ logger: false, bodyLimit: 256000 });
-  const jobs = new Jobs(store, provider);
+  const jobs = new Jobs(store, services?.analysis);
   app.register(multipart, {
     limits: { fileSize: 500 * 1024 * 1024, files: 1, parts: 2 },
   });
@@ -45,7 +50,7 @@ export function createApp(store: Store, provider?: Provider) {
   };
   app.get("/api/health", async () => ({
     ok: true,
-    liveConfigured: !!provider,
+    liveConfigured: !!services,
     model: "gpt-live-1",
     microphone,
     voiceLifecycle,
@@ -162,7 +167,7 @@ export function createApp(store: Store, provider?: Provider) {
     async (req, reply) => {
       const e = get(req.params.id);
       if (!e.analysis) throw Error("节目尚未完成分析");
-      if (!provider)
+      if (!services)
         return reply
           .code(503)
           .send({ error: "请在本地 .env 配置 OPENAI_API_KEY 后重启后端" });
@@ -188,9 +193,9 @@ export function createApp(store: Store, provider?: Provider) {
       );
       const streaming = req.headers.accept?.includes("application/x-ndjson");
       const stream = streaming ? new PassThrough() : undefined;
-      const send = (event: unknown) => {
+      const send = (event: QuestionEvent) => {
         if (stream && !stream.destroyed && !controller.signal.aborted)
-          stream.write(JSON.stringify(event) + "\n");
+          stream.write(JSON.stringify(questionEventSchema.parse(event)) + "\n");
       };
       if (stream)
         reply
@@ -198,11 +203,13 @@ export function createApp(store: Store, provider?: Provider) {
           .header("Cache-Control", "no-cache")
           .send(stream);
       try {
-        const result = await provider.answer(
-          e.analysis,
-          { ...q, atMs: Math.min(q.atMs, e.durationMs) },
-          AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]),
-          (phase) => send({ type: "progress", revision: q.revision, phase }),
+        const result = questionResultSchema.parse(
+          await services.questions.answer(
+            e.analysis,
+            { ...q, atMs: Math.min(q.atMs, e.durationMs) },
+            AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]),
+            (phase) => send({ type: "progress", revision: q.revision, phase }),
+          ),
         );
         await writeFile(
           taskPath,
@@ -243,7 +250,7 @@ export function createApp(store: Store, provider?: Provider) {
     "/api/episodes/:id/transcribe-question",
     async (req, reply) => {
       get(req.params.id);
-      if (!provider)
+      if (!services)
         return reply.code(503).send({ error: "服务端未配置 OpenAI API key" });
       const file = await req.file({
         limits: { fileSize: 12 * 1024 * 1024, files: 1 },
@@ -263,7 +270,7 @@ export function createApp(store: Store, provider?: Provider) {
       reply.raw.on("close", onClose);
       try {
         return {
-          text: await provider.transcribeQuestion(
+          text: await services.voice.transcribeQuestion(
             bytes,
             AbortSignal.any([abort.signal, AbortSignal.timeout(30000)]),
           ),
@@ -278,10 +285,10 @@ export function createApp(store: Store, provider?: Provider) {
     async (req, reply) => {
       const e = get(req.params.id);
       if (!e.analysis) throw Error("节目尚未完成分析");
-      if (!provider)
+      if (!services)
         return reply.code(503).send({ error: "服务端未配置 OpenAI API key" });
       const q = liveSchema.parse(req.body);
-      const result = await provider.createLive(
+      const result = await services.voice.createLive(
         q.sdp,
         e.analysis,
         q.atMs,

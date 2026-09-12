@@ -30,7 +30,7 @@ export class MicrophoneBuffer {
         return "overflow";
       }
     }
-    for (const x of frame) {
+    for (const x of this.ring.length ? frame : []) {
       this.ring[this.cursor] = x;
       this.cursor = (this.cursor + 1) % this.ring.length;
       this.count = Math.min(this.count + 1, this.ring.length);
