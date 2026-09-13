@@ -39,9 +39,8 @@ test("English browser default, persistent switch, and uninterrupted playback", a
   const position = await audio!.evaluate(
     (audio: HTMLAudioElement) => audio.currentTime,
   );
-  await page
-    .getByRole("combobox", { name: "Interface language" })
-    .selectOption("zh");
+  await page.getByRole("button", { name: "Interface language" }).click();
+  await page.getByRole("option", { name: "中文" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("保留这段对话");
@@ -53,14 +52,15 @@ test("English browser default, persistent switch, and uninterrupted playback", a
     ),
   ).toBe(true);
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "界面语言" })).toHaveValue(
-    "zh",
-  );
+  await expect(
+    page.getByRole("button", { name: "界面语言" }),
+  ).toContainText("中文");
   await expect(page).toHaveTitle("Aside · 随时聊两句");
-  await page.getByRole("combobox", { name: "界面语言" }).selectOption("en");
+  await page.getByRole("button", { name: "界面语言" }).click();
+  await page.getByRole("option", { name: "English" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("combobox", { name: "Interface language" }),
+    page.getByRole("button", { name: "Interface language" }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -88,7 +88,8 @@ test("Chinese browser works when preference storage is unavailable", async ({
   });
   await page.goto("http://127.0.0.1:5173/");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await page.getByRole("combobox", { name: "界面语言" }).selectOption("en");
+  await page.getByRole("button", { name: "界面语言" }).click();
+  await page.getByRole("option", { name: "English" }).click();
   await expect(
     page.getByRole("heading", { name: /Your podcast.*Now a conversation/ }),
   ).toBeVisible();

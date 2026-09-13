@@ -12,6 +12,7 @@ function App() {
   const player = usePlayerController();
   const {
     episodes,
+    episodesLoading,
     episode,
     error,
     configured,
@@ -73,6 +74,7 @@ function App() {
     return (
       <Landing
         episodes={episodes}
+        loading={episodesLoading}
         error={message(error)}
         spaceLink={!!accountUser}
         accountControl={<AccountControl onAuthChanged={accountUpdated} />}

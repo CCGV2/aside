@@ -136,7 +136,8 @@ export const english: Record<string, string> = {
   "不必等到最后。": "Now a conversation.",
   "听播客时，随时开口问。聊清楚了，再从刚才那句话自然接着听。":
     "Ask whenever curiosity strikes. Talk it through, then pick up right where you left off.",
-  免登录试听: "Try a sample",
+  试听: "Try a sample",
+  "暂时没有可试听节目。": "No samples are available right now.",
   "无需注册 · 打开示例即可收听": "No sign-up. Just press play.",
   如何使用: "How it works",
   收听与提问示意: "Preview of listening and asking",

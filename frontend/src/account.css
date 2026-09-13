@@ -5,6 +5,17 @@
   white-space: nowrap;
   font-size: 13px;
   padding: 7px 10px;
+  animation: account-in 240ms ease;
+}
+@keyframes account-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-trigger {
+    animation: none;
+  }
 }
 .account-avatar-small,
 .account-avatar-large {

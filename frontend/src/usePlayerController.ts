@@ -29,13 +29,18 @@ export function usePlayerController() {
   const { session, audio } = runtime;
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [episodesLoading, setEpisodesLoading] = useState(true);
   const [episode, setEpisode] = useState<Episode>();
   const [uploadsEnabled, setUploadsEnabled] = useState(false);
   const [debug, setDebug] = useState(false);
   const selected = useRef<Episode | undefined>(undefined);
   const loadVersion = useRef(0);
   const refresh = async () => {
-    setEpisodes(await episodeLibrary.list());
+    try {
+      setEpisodes(await episodeLibrary.list());
+    } finally {
+      setEpisodesLoading(false);
+    }
   };
   async function load(id: string) {
     session.stop();
@@ -61,7 +66,10 @@ export function usePlayerController() {
         }
       })
       .catch((error) => {
-        if (!disposed) session.setError(error.message);
+        if (!disposed) {
+          setEpisodesLoading(false);
+          session.setError(error.message);
+        }
       });
     const pagehide = () => session.stop();
     window.addEventListener("pagehide", pagehide);
@@ -69,7 +77,10 @@ export function usePlayerController() {
       void episodeLibrary
         .list()
         .then((list) => {
-          if (!disposed) setEpisodes(list);
+          if (!disposed) {
+            setEpisodes(list);
+            setEpisodesLoading(false);
+          }
         })
         .catch(() => {});
       const current = selected.current;
@@ -102,6 +113,7 @@ export function usePlayerController() {
   return {
     ...snapshot,
     episodes,
+    episodesLoading,
     episode,
     uploadsEnabled,
     debug,

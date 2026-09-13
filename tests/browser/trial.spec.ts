@@ -29,7 +29,7 @@ test("guest Turnstile follows entry microphone permission and does not block pla
     route.fulfill({ contentType: "application/javascript", body: "window.turnstile={render(el,options){const b=document.createElement('button');b.textContent='Test verification';b.onclick=()=>options.callback('token');el.append(b);return 'widget'},remove(){}};" }),
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "免登录试听" }).click();
+  await page.getByRole("button", { name: "试听" }).click();
   await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
   expect(await page.evaluate(() => (window as any).permissionRequested)).toBe(true);
   expect(trialReads).toBe(0);
@@ -61,7 +61,7 @@ test("signed-in entry gets microphone permission without a Turnstile dialog", as
     return route.fulfill({ json: { verified: true, enabled: true, siteKey: "test", challenge: "signed-in" } });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "免登录试听" }).click();
+  await page.getByRole("button", { name: "试听" }).click();
   await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
   await expect.poll(() => trialReads).toBeGreaterThan(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);

@@ -155,8 +155,10 @@ export function PlayerView({
     <main className={compact ? "player-main listening-layout" : "player-main"}>
       <header className="player-header">
         <span>{t("你的播客，留一点对话的空间")}</span>
-        <LanguageSelect />
-        <AccountControl onAuthChanged={onAuthChanged} />
+        <div className="player-header-actions">
+          <LanguageSelect />
+          <AccountControl onAuthChanged={onAuthChanged} />
+        </div>
       </header>
       {error && (
         <div role="alert" className="alert">

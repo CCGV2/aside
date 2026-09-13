@@ -28,7 +28,7 @@ test("entry requests microphone access, releases the device, and shows no settin
   );
   await page.goto("/");
   expect(await page.evaluate(() => (window as any).permissionRequests)).toBe(0);
-  await page.getByRole("button", { name: "免登录试听" }).click();
+  await page.getByRole("button", { name: "试听" }).click();
   await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => (window as any).permissionRequests))

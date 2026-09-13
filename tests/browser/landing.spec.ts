@@ -10,7 +10,7 @@ test("public landing explains the interaction and opens the sample without uploa
     });
   });
   await page.goto("/");
-  const cta = page.getByRole("button", { name: "免登录试听" });
+  const cta = page.getByRole("button", { name: "试听" });
   await expect(cta).toBeEnabled();
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
   await page.getByRole("button", { name: "02 问一句，聊明白" }).click();
@@ -47,4 +47,12 @@ test("public landing explains the interaction and opens the sample without uploa
       page.getByRole("button", { name: "播放", exact: true }),
     ).toBeInViewport();
   }
+});
+
+test("an empty public library stops showing loading placeholders", async ({ page }) => {
+  await page.route("**/api/episodes", (route) => route.fulfill({ json: [] }));
+  await page.goto("/");
+  await expect(page.getByText("暂时没有可试听节目。")).toBeVisible();
+  await expect(page.locator(".sample-skeleton")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "试听" })).toBeDisabled();
 });
