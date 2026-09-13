@@ -19,8 +19,7 @@ test("chunk boundaries prefer silence while covering every millisecond", () => {
 });
 test("analysis retry reuses completed transcript and survives storage reopen", async () => {
   const root = await mkdtemp(join(tmpdir(), "aside-jobs-"));
-  const store = new Store(root);
-  await mkdir(store.dir("fixture"));
+  let store = new Store(root);
   const wav = Buffer.alloc(44 + 48000);
   wav.write("RIFF");
   wav.writeUInt32LE(wav.length - 8, 4);
@@ -34,7 +33,7 @@ test("analysis retry reuses completed transcript and survives storage reopen", a
   wav.writeUInt16LE(16, 34);
   wav.write("data", 36);
   wav.writeUInt32LE(48000, 40);
-  await writeFile(join(store.dir("fixture"), "original"), wav);
+  await store.objects.put("episodes/fixture/original", [wav]);
   store.put({
     id: "fixture",
     title: "test",
@@ -67,6 +66,8 @@ test("analysis retry reuses completed transcript and survives storage reopen", a
   try {
     await new Jobs(store, port).drain();
     assert.equal(store.get("fixture")?.status, "failed");
+    store.close();
+    store = new Store(root);
     const e = store.get("fixture")!;
     store.put({ ...e, status: "queued" });
     await new Jobs(store, port).drain();

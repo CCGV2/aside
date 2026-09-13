@@ -10,35 +10,35 @@ flowchart LR
   F --> C[engine/core]
   F -->|HTTP / NDJSON| B[backend / Fastify]
   B --> S[engine/server]
-  B --> D[(SQLite + 本地文件)]
+  B --> D[(SQLite 记录 + 分块音频)]
   B --> M[模型分析与工具调用]
   F -->|按需 WebRTC| L[Live 语音会话]
   B -->|建立会话 / SDP| L
 ```
 
-| 模块 | 负责 | 主要入口 |
-| --- | --- | --- |
-| `engine/core` | 浏览器安全的类型、播放状态转换、固定续播锚点和 revision 校验 | `engine/src/core.ts` |
-| `engine/server` | 分析结果组装、声音选择、上下文构造、已听内容检索 | `engine/src/server.ts` |
-| `backend` | HTTP、持久化、音频处理、任务恢复、模型与工具执行 | `backend/src/app.ts`、`jobs.ts`、`question-service.ts`、`provider.ts` |
-| `frontend` | UI、原音频播放、本地 VAD、按需会话与实时音频 | `frontend/src/listening-session.ts`、`conversation.ts`、`usePlayerController.ts`、`on-demand-voice.ts` |
+| 模块            | 负责                                                         | 主要入口                                                                                               |
+| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `engine/core`   | 浏览器安全的类型、播放状态转换、固定续播锚点和 revision 校验 | `engine/src/core.ts`                                                                                   |
+| `engine/server` | 分析结果组装、声音选择、上下文构造、已听内容检索             | `engine/src/server.ts`                                                                                 |
+| `backend`       | HTTP、持久化、音频处理、任务恢复、模型与工具执行             | `backend/src/app.ts`、`jobs.ts`、`question-service.ts`、`provider.ts`                                  |
+| `frontend`      | 页面组合、播放器界面、原音频播放、本地 VAD 与按需会话       | `frontend/src/main.tsx`、`PlayerView.tsx`、`usePlayerController.ts`、`listening-session.ts`            |
 
 `engine/contracts` 提供浏览器安全的请求、回答、来源、进度、错误与 checkpoint 契约，Zod schema 派生 TypeScript 类型。JSON 与 NDJSON 共用回答校验，并检查请求/响应 revision。
 
-Engine 不依赖 Fastify、React、数据库或模型 SDK。前端不得导入 `engine/server` 或后端实现。`scripts/check-boundaries.mjs` 在类型检查之后检查这些导入边界。当前没有独立部署的 worker；backend 进程同时运行 API 与分析队列。
+Engine 不依赖 Fastify、React、数据库或模型 SDK。前端不得导入 `engine/server` 或后端实现。`scripts/check-boundaries.mjs` 在类型检查之后检查这些导入边界。本地模式由 backend 进程同时运行 API 与分析队列；新增 Cloudflare 模式由 Worker 处理 API、Workflow 编排分析、Container 执行 FFmpeg，D1/R2 保存数据，详见 [Cloudflare 后端](cloudflare.md)。
 
 ## 收听运行时与展示
 
 - `ListeningSession` 持有播放 reducer、设备连接和完整收听操作。定位、提问、停止都由它保证取消与设备动作的先后顺序。
 - `Conversation` 统一持有问答轮次、过期请求、字幕、委派、回答音频分类、延迟记录与续播等待；使用注入的 `RuntimeClock`。
-- `usePlayerController` 订阅运行时快照，处理节目列表、载入、轮询、checkpoint 与浏览器偏好。`main.tsx` 不接触 voice 实例、可写 state/history 引用或底层 dispatch。
+- `usePlayerController` 订阅运行时快照，处理节目列表、载入、轮询、checkpoint 与浏览器偏好。`PlayerView` 负责节目标题、底部播放栏、对话、键盘快捷键和页面动效；`Transcript` 负责逐句显示、跟随滚动及句首跳播按钮。点击句首按钮经 controller 的 `seek` 清除旧打断/续播任务，再调用 `startListening` 播放。公开试听与 My Space 复用同一播放器。`Space` 让左侧上传按钮直接打开文件选择器，在侧栏展示预检、上传状态和私人列表；中间只承载播放器或空库提示。`main.tsx` 只组合路由、账号状态和两种页面外壳，不接触 voice 实例、可写 state/history 引用或底层 dispatch。
 - `BrowserPodcastAudio` 是原音频的 DOM Adapter，`player-api.ts` 是前端 HTTP Adapter；按需语音仍由 OnDemandVoice 管理。
 
 详见 [ADR 0003](adr/0003-listening-and-question-ownership.md) 和 [领域语言](../CONTEXT.md)。
 
 ## 音频分析
 
-1. 上传文件流写入本地存储，限制 500 MB；通过 ffprobe 验证音频并读取时长。
+1. 本地模式将上传字节流分块写入 SQLite 对象存储；Cloudflare 私人 Space 使用 R2 分片上传，单文件限制 1 GiB、最长 5 小时。两种模式均通过 ffprobe 验证音频并读取时长。
 2. ffmpeg 根据静音位置切出约四分钟的片段，转为单声道压缩音频。
 3. 各块依次进行转录和音频理解，保留词句时间戳、说话人声音倾向、语义分组、摘要和表达风格。
 4. Engine 将结果组装为整期内容地图，形成 Transcript 和自然续播点。声音按说话时长汇总选择预设，未知情况使用回退规则。
@@ -90,12 +90,12 @@ stateDiagram-v2
 
 后端 `question-service.ts` 编排问答、执行工具并收集来源；`provider.ts` 的 OpenAIProvider 只转换模型协议与分析/语音接入，Live 负责实时语音交互与表达。后端最多执行五轮模型/工具循环，支持：
 
-| 工具 | 用途 |
-| --- | --- |
-| `get_passage` | 读取指定节目片段 |
+| 工具             | 用途                   |
+| ---------------- | ---------------------- |
+| `get_passage`    | 读取指定节目片段       |
 | `search_podcast` | 在允许的节目内容中检索 |
-| `web_search` | 获取外部补充资料 |
-| `resume_podcast` | 表达明确的续播意图 |
+| `web_search`     | 获取外部补充资料       |
+| `resume_podcast` | 表达明确的续播意图     |
 
 上下文包含打断位置、当前已听片段、近期内容、较早片段及对话历史。全文预分析不意味着全文直接喂给问答：默认按播放位置限制节目证据，避免提前透露后续内容。节目检索目前是关键词检索，不依赖向量数据库。
 
@@ -109,27 +109,27 @@ Agent 被指示以当前节目人物的第一人称视角解释，并区分不�
 
 ## 持久化与接口
 
-默认数据目录为 `.data/`，可通过 `ASIDE_DATA_DIR` 覆盖。SQLite 使用 WAL，保存节目、播放 checkpoint 和 Live 使用记录；音频、分析分块、模型原始输出、任务状态存为本地文件。checkpoint 包含播放位置和对话历史。云端会话本身不会因持久化而永久存活。
+默认数据库目录为 `.data/`，可通过 `ASIDE_DATA_DIR` 覆盖。SQLite 使用 WAL，保存节目、播放 checkpoint、Live 使用记录、逐字稿、分析缓存、模型原始输出及问答任务状态；原音频保存在数据库的分块对象表。媒体适配器将音频临时物化供 FFmpeg 使用，用完清理。checkpoint 包含播放位置和对话历史。云端会话本身不会因持久化而永久存活。
 
 主要 HTTP 接口均在 `/api` 下：
 
-| 路径 | 方法 | 用途 |
-| --- | --- | --- |
-| `/health` | GET | 服务与公开配置 |
-| `/episodes` | GET / POST | 列表与上传 |
-| `/episodes/:id` | GET | 节目及分析状态 |
-| `/episodes/:id/retry` | POST | 重试失败分析 |
-| `/episodes/:id/audio` | GET | 支持 Range 的原音频 |
-| `/episodes/:id/checkpoint` | GET / PUT | 恢复播放与历史 |
-| `/episodes/:id/question` | POST | JSON 或 NDJSON 问答 |
-| `/episodes/:id/transcribe-question` | POST | 冷启动提问转录 |
-| `/episodes/:id/live` | POST | Live 会话协商 |
-| `/episodes/:id/usage` | GET / POST | 使用时间记录 |
+| 路径                                | 方法       | 用途                |
+| ----------------------------------- | ---------- | ------------------- |
+| `/health`                           | GET        | 服务与公开配置      |
+| `/episodes`                         | GET / POST | 列表与上传          |
+| `/episodes/:id`                     | GET        | 节目及分析状态      |
+| `/episodes/:id/retry`               | POST       | 重试失败分析        |
+| `/episodes/:id/audio`               | GET        | 支持 Range 的原音频 |
+| `/episodes/:id/checkpoint`          | GET / PUT  | 恢复播放与历史      |
+| `/episodes/:id/question`            | POST       | JSON 或 NDJSON 问答 |
+| `/episodes/:id/transcribe-question` | POST       | 冷启动提问转录      |
+| `/episodes/:id/live`                | POST       | Live 会话协商       |
+| `/episodes/:id/usage`               | GET / POST | 使用时间记录        |
 
 API Key 只在后端读取；配置通过显式白名单提供给前端。使用时间记录不是供应商账单，断线等情况可能造成统计不完整。
 
-## 未来部署边界
+## 部署边界
 
 当前 API 绑定 loopback，开发前端通过 Vite 代理访问，没有多用户认证。前端构建只生成静态资源，不包含生产后端启动器。
 
-未来拆分部署时，需要补充身份认证与数据隔离、HTTPS 和代理配置、对象存储、可协调的任务队列及 worker、部署与使用量观测。保留 engine / backend / frontend 的依赖方向，可以在这些变化中复用领域逻辑与播放器。
+Cloudflare 入口已实现匿名签名会话与隔离、D1/R2 存储、私人分片上传、Workflow 和音频 Container。账号层支持邮件验证码/Google 登录与 profile，登录后以稳定账号 ID 访问私有数据；私人 Space 已上线上传、自动分析、个人列表和删除。Google 登录已在 PAX Chrome profile 中通过线上回调；邮件验证码登录、profile 保存、头像上传和真实私人音频上传的生产交互仍待验证。Live 由持久化监督器执行服务端到期关闭。Cloudflare 本地验证与远端部署是不同的证据，配置与限制见 [Cloudflare 后端](cloudflare.md)、[用户账号](accounts.md)和[个人 Space](personal-space.md)。

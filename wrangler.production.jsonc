@@ -1,0 +1,97 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "asidefm",
+  "main": "cloudflare/src/index.ts",
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "vars": {
+    "APP_ORIGIN": "https://asidefm.com",
+    "ALLOW_UPLOADS": "true",
+    "AI_ENABLED": "true",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAEyIQuX7vD966Cp_",
+    "AUTH_EMAIL_FROM": "login@auth.asidefm.com",
+    "DAILY_UPLOAD_LIMIT": "5",
+    "GLOBAL_DAILY_UPLOAD_LIMIT": "10",
+    "ACCOUNT_STORAGE_LIMIT_BYTES": "21474836480",
+    "GLOBAL_STORAGE_LIMIT_BYTES": "107374182400",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "asidefm",
+      "database_id": "5e090133-a259-40a8-a20b-5262a5f7bc48",
+      "migrations_dir": "cloudflare/migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AUDIO",
+      "bucket_name": "asidefm-audio",
+    },
+  ],
+  "send_email": [
+    { "name": "EMAIL", "allowed_sender_addresses": ["login@auth.asidefm.com"] },
+  ],
+  "workflows": [
+    {
+      "binding": "ANALYSIS",
+      "name": "asidefm-analysis",
+      "class_name": "EpisodeAnalysis",
+    },
+  ],
+  "containers": [
+    {
+      "class_name": "MediaContainer",
+      "image": "./cloudflare/Dockerfile",
+      "image_build_context": ".",
+      "instance_type": "standard-1",
+      "max_instances": 2,
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MEDIA",
+        "class_name": "MediaContainer",
+      },
+      {
+        "name": "LIVE",
+        "class_name": "LiveSupervisor",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MediaContainer"],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["LiveSupervisor"],
+    },
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "invocation_logs": false,
+    },
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "asidefm.com",
+      "custom_domain": true,
+    },
+  ],
+  "account_id": "221784d24eb2a95d148bc96b6f06d6be",
+}

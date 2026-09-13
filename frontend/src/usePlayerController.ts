@@ -1,8 +1,10 @@
+import { requestMicrophonePermission } from "./microphone";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Episode } from "@aside/engine/core";
 import { ListeningSession, type ListeningMode } from "./listening-session";
 import { BrowserPodcastAudio } from "./podcast-audio";
 import { episodeLibrary, playerBackend } from "./player-api";
+import { prepareTrial } from "./trial-access";
 export const names = {
   paused: "已暂停",
   playing: "正在播放",
@@ -12,13 +14,6 @@ export const names = {
   resuming: "回到节目",
   reconnecting: "连接已断开",
 };
-function preference(key: string) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
 function savePreference(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
@@ -28,22 +23,14 @@ function savePreference(key: string, value: string) {
 export function usePlayerController() {
   const [runtime] = useState(() => {
     const audio = new BrowserPodcastAudio();
-    const mode = preference("aside.listeningMode");
-    const savedWait = preference("aside.followupMs");
-    const session = new ListeningSession(audio, playerBackend, {
-      mode: mode === "manual" || mode === "off" ? mode : "auto",
-      followupMs:
-        savedWait !== null && [0, 3000, 8000].includes(Number(savedWait))
-          ? Number(savedWait)
-          : undefined,
-    });
+    const session = new ListeningSession(audio, playerBackend);
     return { audio, session };
   });
   const { session, audio } = runtime;
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [episode, setEpisode] = useState<Episode>();
-  const [uploading, setUploading] = useState(false);
+  const [uploadsEnabled, setUploadsEnabled] = useState(false);
   const [debug, setDebug] = useState(false);
   const selected = useRef<Episode | undefined>(undefined);
   const loadVersion = useRef(0);
@@ -64,13 +51,14 @@ export function usePlayerController() {
   }
   useEffect(() => {
     let disposed = false;
-    void refresh().catch((error) => {
-      if (!disposed) session.setError(error.message);
-    });
     void episodeLibrary
       .health()
-      .then((health) => {
-        if (!disposed) session.configure(health);
+      .then(async (health) => {
+        if (!disposed) {
+          session.configure(health);
+          setUploadsEnabled(health.uploadsEnabled !== false);
+          await refresh();
+        }
       })
       .catch((error) => {
         if (!disposed) session.setError(error.message);
@@ -115,7 +103,7 @@ export function usePlayerController() {
     ...snapshot,
     episodes,
     episode,
-    uploading,
+    uploadsEnabled,
     debug,
     setDebug,
     audio: audio.attach,
@@ -142,21 +130,30 @@ export function usePlayerController() {
       session.setFollowupMs(delay);
     },
     load,
-    async upload(file?: File) {
-      if (!file) return;
-      setUploading(true);
-      session.setError("");
-      try {
-        const next = await episodeLibrary.upload(file);
-        await refresh();
-        await load(next.id);
-      } catch (error) {
-        session.setError(
-          error instanceof Error ? error.message : String(error),
-        );
-      } finally {
-        setUploading(false);
-      }
+    async authChanged() {
+      session.stop();
+      selected.current = undefined;
+      setEpisode(undefined);
+      await refresh();
+    },
+    async enter(id: string) {
+      // Start the browser prompt in the entry click, without waiting for API reads.
+      session.setListeningMode("off");
+      const permission = requestMicrophonePermission().then(
+        () => true,
+        () => false,
+      );
+      await load(id);
+      const version = loadVersion.current;
+      const granted = await permission;
+      if (version !== loadVersion.current || selected.current?.id !== id)
+        return;
+      if (granted) session.setListeningMode("auto");
+      else session.setError("未获得麦克风权限，仍可继续收听或打字提问。");
+      void prepareTrial().catch((error) => {
+        if (version === loadVersion.current && selected.current?.id === id)
+          session.setError(error.message);
+      });
     },
     async retry() {
       if (selected.current) {
@@ -166,3 +163,5 @@ export function usePlayerController() {
     },
   };
 }
+
+export type PlayerController = ReturnType<typeof usePlayerController>;

@@ -19,7 +19,10 @@ export interface QuestionAnswerer {
 }
 /** Application policy: intent, heard-only retrieval, tool budget and sources. */
 export class QuestionService implements QuestionAnswerer {
-  constructor(private model: QuestionModel) {}
+  constructor(
+    private model: QuestionModel,
+    private rounds = 5,
+  ) {}
   async answer(
     analysis: Analysis,
     request: QuestionRequest,
@@ -41,7 +44,7 @@ export class QuestionService implements QuestionAnswerer {
       used: string[] = [];
     let previousId: string | undefined;
     let toolResults: ToolResult[] = [];
-    for (let round = 0; round < 5; round++) {
+    for (let round = 0; round < this.rounds; round++) {
       signal?.throwIfAborted();
       progress?.(round === 0 ? "working" : "continuing");
       const response = await this.model.reply({
@@ -60,6 +63,7 @@ export class QuestionService implements QuestionAnswerer {
       toolResults = [];
       if (response.searchedWeb) used.push("search_web");
       sources.push(...response.sources);
+      if (response.calls.length > 8) throw Error("Tool call limit reached");
       for (const call of response.calls) {
         used.push(call.name);
         progress?.("searching");

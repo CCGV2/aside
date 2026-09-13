@@ -77,3 +77,15 @@ test("manual capture has no pre-roll but preserves non-silent PCM while held", a
     Math.round(0.25 * 32767),
   );
 });
+
+test("cloud recording cap discards audio after thirty seconds", () => {
+  const buffer = new MicrophoneBuffer(
+    16000,
+    { ...config, maxCaptureMs: 30000 },
+    0,
+  );
+  buffer.begin();
+  assert.notEqual(buffer.push(new Float32Array(16000 * 30)), "overflow");
+  assert.equal(buffer.push(new Float32Array(160)), "overflow");
+  assert.throws(() => buffer.snapshot());
+});

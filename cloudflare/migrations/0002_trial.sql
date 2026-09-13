@@ -1,0 +1,5 @@
+CREATE TABLE trial_proofs(owner TEXT PRIMARY KEY, ip TEXT NOT NULL, expires INTEGER NOT NULL);
+CREATE TABLE trial_leases(owner TEXT NOT NULL, kind TEXT NOT NULL, token TEXT NOT NULL, expires INTEGER NOT NULL, PRIMARY KEY(owner,kind));
+CREATE TABLE trial_control(id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL);
+INSERT INTO trial_control VALUES(1,1);
+CREATE TABLE trial_breakers(owner TEXT PRIMARY KEY);

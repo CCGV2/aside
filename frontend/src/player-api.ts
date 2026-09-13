@@ -1,3 +1,4 @@
+import { configureTrial, trialFetch } from "./trial-access";
 import type {
   Episode,
   MicrophoneConfig,
@@ -14,6 +15,22 @@ import {
   type QuestionPhase,
 } from "@aside/engine/contracts";
 import { readQuestion } from "./question-stream";
+import { MAX_UPLOAD_BYTES } from "@aside/engine/core";
+export interface SpacePage {
+  episodes: Episode[];
+  pending: { id: string; title: string; size: number; createdAt: string }[];
+  usedToday: number;
+  dailyLimit: number;
+  usedStorage: number;
+  storageLimit: number;
+  nextCursor: string | null;
+}
+export interface UploadOptions {
+  title: string;
+  signal?: AbortSignal;
+  onStarted?: (id: string) => void;
+  onProgress?: (bytes: number, total: number, phase: "uploading" | "processing") => void;
+}
 export interface PlayerBackend {
   question(
     id: string,
@@ -30,6 +47,9 @@ export interface PlayerBackend {
 }
 export interface PlayerHealth {
   liveConfigured: boolean;
+  trial?: boolean;
+  uploadMode?: "multipart";
+  uploadsEnabled?: boolean;
   microphone: MicrophoneConfig;
   voiceLifecycle: VoiceLifecycleConfig;
 }
@@ -39,7 +59,10 @@ const json = (body: unknown, method = "POST"): RequestInit => ({
   body: JSON.stringify(body),
 });
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch("/api" + path, init);
+  const paid =
+    /\/(question|live|transcribe-question|retry)$/.test(path) ||
+    (path.startsWith("/uploads") && init?.method === "POST");
+  const response = await (paid ? trialFetch : fetch)("/api" + path, init);
   if (!response.ok) {
     const error = errorSchema.safeParse(
       await response.json().catch(() => null),
@@ -51,7 +74,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export const playerBackend: PlayerBackend = {
   async question(id, request, signal, progress) {
     const result = await readQuestion(
-      await fetch(`/api/episodes/${id}/question`, {
+      await trialFetch(`/api/episodes/${id}/question`, {
         ...json(request),
         headers: {
           "Content-Type": "application/json",
@@ -82,6 +105,9 @@ export const playerBackend: PlayerBackend = {
 };
 export const episodeLibrary = {
   list: () => api<Episode[]>("/episodes"),
+  space: (cursor?: string) => api<SpacePage>(`/space/episodes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
+  delete: (id: string) => api<{ ok: boolean }>(`/space/episodes/${id}`, { method: "DELETE" }),
+  cancelUpload: (id: string) => api<{ ok: boolean }>(`/uploads/${id}`, { method: "DELETE" }),
   get: (id: string) => api<Episode>(`/episodes/${id}`),
   async checkpoint(id: string) {
     const data = await api<unknown>(`/episodes/${id}/checkpoint`);
@@ -89,9 +115,52 @@ export const episodeLibrary = {
   },
   save: (id: string, checkpoint: Checkpoint) =>
     api(`/episodes/${id}/checkpoint`, json(checkpoint, "PUT")),
-  health: () => api<PlayerHealth>("/health"),
+  health: async () => {
+    const health = await api<PlayerHealth>("/health");
+    configureTrial(health.trial === true);
+    return health;
+  },
   retry: (id: string) => api(`/episodes/${id}/retry`, json({})),
-  upload(file: File) {
+  async upload(file: File, options?: UploadOptions) {
+    if (file.size > MAX_UPLOAD_BYTES) throw Error("文件不能超过 1 GiB");
+    const health = await episodeLibrary.health();
+    if (health.uploadsEnabled === false) throw Error("当前仅开放示例节目试听");
+    if (health.uploadMode === "multipart") {
+      const upload = await api<{ id: string; partSize: number }>(
+        "/uploads",
+        {
+          ...json({
+            title: (options?.title || file.name.replace(/\.[^.]+$/, "")).trim().slice(0, 200),
+            size: file.size,
+          }),
+          signal: options?.signal,
+        },
+      );
+      options?.onStarted?.(upload.id);
+      const parts: { partNumber: number; etag: string }[] = [];
+      try {
+        for (let offset = 0; offset < file.size; offset += upload.partSize) {
+          const partNumber = parts.length + 1;
+          parts.push(
+            await api(`/uploads/${upload.id}/part?number=${partNumber}`, {
+              method: "PUT",
+              body: file.slice(offset, offset + upload.partSize),
+              signal: options?.signal,
+            }),
+          );
+          options?.onProgress?.(Math.min(offset + upload.partSize, file.size), file.size, "uploading");
+        }
+        options?.signal?.throwIfAborted();
+      } catch (error) {
+        await api(`/uploads/${upload.id}`, { method: "DELETE" }).catch(
+          () => {},
+        );
+        throw error;
+      }
+      // Do not abort after completion starts: the server may already be analyzing.
+      options?.onProgress?.(file.size, file.size, "processing");
+      return api<Episode>(`/uploads/${upload.id}/complete`, json({ parts }));
+    }
     const body = new FormData();
     body.append("audio", file);
     return api<Episode>("/episodes", { method: "POST", body });

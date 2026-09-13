@@ -1,0 +1,1400 @@
+import { test, before, after, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { build } from "esbuild";
+import {
+  Miniflare,
+  convertV4MiniflareOptions,
+  WebSocketPair,
+  Response as WorkerResponse,
+} from "miniflare";
+import { CloudStore } from "../../cloudflare/src/store.ts";
+import { analyzeEpisode } from "../../cloudflare/src/pipeline.ts";
+import { mediaApp } from "../../backend/src/container/app.ts";
+let mf, db, bucket;
+let networkCalls = [];
+let acknowledgeClose = true;
+let rejectLive = false;
+let googleIdentity = {
+  sub: "google-sub-1",
+  email: "google-user@gmail.com",
+  email_verified: true,
+  name: "Google Listener",
+  picture: "https://lh3.googleusercontent.com/a/test",
+};
+const controlEvents = [];
+const usedProofs = new Set();
+const origin = "https://aside.test";
+before(async () => {
+  const bundle = await build({
+    entryPoints: ["tests/cloudflare/worker.mjs"],
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "neutral",
+    conditions: ["workerd", "worker", "browser"],
+    external: ["cloudflare:*", "node:*"],
+  });
+  mf = new Miniflare(
+    convertV4MiniflareOptions({
+      modules: true,
+      script: bundle.outputFiles[0].text,
+      compatibilityDate: "2026-09-12",
+      compatibilityFlags: ["nodejs_compat"],
+      d1Databases: ["DB"],
+      r2Buckets: ["AUDIO"],
+      email: {
+        send_email: [
+          {
+            name: "EMAIL",
+            allowed_sender_addresses: ["login@auth.asidefm.com"],
+          },
+        ],
+      },
+      durableObjects: {
+        MEDIA: { className: "TestMedia", useSQLite: true },
+        LIVE: { className: "TestLive", useSQLite: true },
+      },
+      workflows: {
+        ANALYSIS: { name: "analysis-test", className: "TestAnalysis" },
+        PROD_ANALYSIS: {
+          name: "production-analysis-test",
+          className: "EpisodeAnalysis",
+        },
+      },
+      bindings: {
+        APP_ORIGIN: origin,
+        TURNSTILE_SITE_KEY: "test-site",
+        TURNSTILE_SECRET_KEY: "test-secret",
+        SESSION_SECRET: "local-test-secret-at-least-32-characters",
+        OPENAI_API_KEY: "test-placeholder",
+        ALLOW_UPLOADS: "true",
+        AUTH_EMAIL_FROM: "login@auth.asidefm.com",
+        GOOGLE_CLIENT_ID: "google-test-id",
+        GOOGLE_CLIENT_SECRET: "google-test-secret",
+      },
+      serviceBindings: { ASSETS: () => new Response("assets") },
+      outboundService: async (request) => {
+        networkCalls.push(new URL(request.url).pathname);
+        if (request.url === "https://oauth2.googleapis.com/token")
+          return Response.json({ access_token: "google-test-access" });
+        if (request.url === "https://openidconnect.googleapis.com/v1/userinfo")
+          return Response.json(googleIdentity);
+        if (request.url.endsWith("/siteverify")) {
+          const { response: token } = await request.json();
+          const data = JSON.parse(token);
+          const success = !usedProofs.has(token);
+          usedProofs.add(token);
+          return Response.json({
+            success,
+            hostname: "aside.test",
+            action: "aside-trial",
+            ...data,
+          });
+        }
+        if (request.url.endsWith("/attach")) {
+          const pair = new WebSocketPair();
+          pair[1].accept();
+          pair[1].addEventListener("message", (event) => {
+            const data = JSON.parse(event.data);
+            controlEvents.push(data);
+            if (data.type === "session.close" && acknowledgeClose)
+              pair[1].send(JSON.stringify({ type: "session.closed" }));
+          });
+          return new WorkerResponse(null, { status: 101, webSocket: pair[0] });
+        }
+        if (request.url.endsWith("/responses"))
+          return Response.json({
+            id: "response-test",
+            output_text: "A short answer",
+            output: [
+              {
+                type: "message",
+                role: "assistant",
+                content: [
+                  {
+                    type: "output_text",
+                    text: "A short answer",
+                    annotations: [],
+                  },
+                ],
+              },
+            ],
+          });
+        if (request.url.endsWith("/live/sessions")) {
+          if (rejectLive) return new Response("Invalid SDP", { status: 400 });
+          return Response.json({
+            session: { id: crypto.randomUUID() },
+            transport: { sdp: "test-answer" },
+          });
+        }
+        if (request.url.endsWith("/audio/transcriptions"))
+          return Response.json({
+            text: "Question",
+            segments: [{ start: 0, end: 1, text: "A sentence" }],
+            words: [],
+          });
+        if (request.url.endsWith("/chat/completions"))
+          return Response.json({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content: JSON.stringify({
+                    summary: "Summary",
+                    hostStyle: "Calm",
+                    speakers: [],
+                    groups: [{ firstId: "p-0-0", lastId: "p-0-0" }],
+                  }),
+                },
+              },
+            ],
+          });
+        throw Error("Unexpected outbound request");
+      },
+    }),
+  );
+  db = await mf.getD1Database("DB");
+  bucket = await mf.getR2Bucket("AUDIO");
+  const sql =
+    (await readFile("cloudflare/migrations/0001_initial.sql", "utf8")) +
+    (await readFile("cloudflare/migrations/0002_trial.sql", "utf8")) +
+    (await readFile("cloudflare/migrations/0003_artifacts.sql", "utf8"));
+  const accountsSql = await readFile(
+    "cloudflare/migrations/0004_accounts.sql",
+    "utf8",
+  );
+  const spaceSql = await readFile(
+    "cloudflare/migrations/0005_personal_space.sql",
+    "utf8",
+  );
+  for (const statement of (sql + accountsSql + spaceSql)
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean))
+    await db.prepare(statement).run();
+  await db.prepare("CREATE TABLE test_jobs(id TEXT PRIMARY KEY)").run();
+});
+after(async () => {
+  await mf?.dispose();
+});
+beforeEach(async () => {
+  await db.prepare("DELETE FROM budgets WHERE bucket LIKE 'burst:%'").run();
+});
+async function visitor(verified = true) {
+  const response = await mf.dispatchFetch(origin + "/api/health");
+  assert.equal(response.status, 200, await response.clone().text());
+  const cookie = response.headers.get("set-cookie").split(";")[0];
+  const id = cookie.split("=")[1].split(".")[0];
+  const user = {
+    cookie,
+    id,
+    request: (path, method = "GET", body, headers = {}) =>
+      mf.dispatchFetch(origin + path, {
+        method,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: {
+          cookie,
+          origin,
+          "content-type": "application/json",
+          ...headers,
+        },
+      }),
+  };
+  if (verified) {
+    const result = await user.request("/api/trial", "POST", {
+      token: JSON.stringify({ cdata: id, nonce: crypto.randomUUID() }),
+    });
+    assert.equal(result.status, 200, await result.text());
+  }
+  return user;
+}
+async function setTestLoginCode(email) {
+  // The email binding is simulated locally. Fix the stored challenge so the
+  // authentication flow can be exercised without reading simulator temp files.
+  const code = "12345678";
+  const codeHash = createHash("sha256")
+    .update(`local-test-secret-at-least-32-characters:${email}:${code}`)
+    .digest("hex");
+  const result = await db
+    .prepare("UPDATE auth_codes SET code_hash=? WHERE email=?")
+    .bind(codeHash, email)
+    .run();
+  assert.equal(result.meta.changes, 1);
+  return code;
+}
+async function signedInAccount() {
+  const guest = await visitor(false);
+  const email = `upload-${crypto.randomUUID()}@example.com`;
+  const sent = await guest.request("/api/auth/email/start", "POST", { email });
+  assert.equal(sent.status, 200, await sent.clone().text());
+  const code = await setTestLoginCode(email);
+  const verified = await guest.request("/api/auth/email/verify", "POST", {
+    email,
+    code,
+  });
+  assert.equal(verified.status, 200, await verified.clone().text());
+  const authCookie = verified.headers.get("set-cookie").split(";")[0];
+  const id = (await verified.json()).user.id;
+  const cookie = `${guest.cookie}; ${authCookie}`;
+  const request = (path, method = "GET", body, headers = {}) =>
+    guest.request(path, method, body, { cookie, ...headers });
+  return { id, cookie, authCookie, request };
+}
+const analysis = {
+  version: "test",
+  source: "demo",
+  passages: [],
+  anchors: [],
+  summary: "",
+  hostStyle: "",
+  speakers: [],
+  voice: "masculine",
+  voiceReason: "test",
+};
+async function seed(id, owner, shared = false, ready = true) {
+  const episode = {
+    id,
+    title: "Episode",
+    createdAt: new Date().toISOString(),
+    durationMs: 10000,
+    status: ready ? "ready" : "queued",
+    stage: "ready",
+    progress: ready ? 1 : 0,
+  };
+  const key = `episodes/${id}/analysis.json`;
+  if (ready) await new CloudStore(db, bucket).records.put(key, analysis);
+  await db
+    .prepare(
+      "INSERT INTO episodes(id,owner_id,public,metadata,analysis_key,created_at) VALUES(?,?,?,?,?,?)",
+    )
+    .bind(
+      id,
+      owner,
+      shared ? 1 : 0,
+      JSON.stringify(episode),
+      ready ? key : null,
+      episode.createdAt,
+    )
+    .run();
+  await bucket.put(`episodes/${id}/original`, "0123456789");
+}
+test("email login creates a stable owner, claims visitor episodes, and protects profile", async () => {
+  const guest = await visitor(false);
+  await seed("email-private", guest.id);
+  const email = "listener@example.com";
+  const sent = await guest.request("/api/auth/email/start", "POST", { email });
+  assert.equal(sent.status, 200, await sent.clone().text());
+  const loginCode = await setTestLoginCode(email);
+  const verified = await guest.request("/api/auth/email/verify", "POST", {
+    email,
+    code: loginCode,
+  });
+  assert.equal(verified.status, 200, await verified.clone().text());
+  const auth = verified.headers.get("set-cookie").split(";")[0];
+  const account = (await verified.json()).user;
+  assert.equal(account.email, email);
+  assert.equal(
+    (
+      await guest.request("/api/auth/email/verify", "POST", {
+        email,
+        code: loginCode,
+      })
+    ).status,
+    400,
+  );
+  const other = await visitor(false);
+  assert.equal(
+    (await other.request("/api/episodes/email-private")).status,
+    404,
+  );
+  assert.equal((await other.request("/api/profile")).status, 401);
+  const withAuth = (path, method = "GET", body, headers = {}) =>
+    other.request(path, method, body, {
+      cookie: `${other.cookie}; ${auth}`,
+      ...headers,
+    });
+  assert.equal((await withAuth("/api/episodes/email-private")).status, 200);
+  const edited = await withAuth("/api/profile", "PATCH", {
+    alias: "Thoughtful listener",
+    description: "I like history podcasts.",
+  });
+  assert.equal(edited.status, 200, await edited.clone().text());
+  assert.equal((await edited.json()).user.alias, "Thoughtful listener");
+  const avatar = await withAuth("/api/profile/avatar", "PUT", undefined, {
+    "content-type": "image/png",
+  });
+  assert.equal(avatar.status, 400);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+    "base64",
+  );
+  const uploaded = await mf.dispatchFetch(origin + "/api/profile/avatar", {
+    method: "PUT",
+    headers: {
+      cookie: `${other.cookie}; ${auth}`,
+      origin,
+      "content-type": "image/png",
+    },
+    body: png,
+  });
+  assert.equal(uploaded.status, 200, await uploaded.text());
+  const fetched = await withAuth("/api/profile/avatar");
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.headers.get("content-type"), "image/png");
+  assert.deepEqual(Buffer.from(await fetched.arrayBuffer()), png);
+  const signedOut = await withAuth("/api/auth/logout", "POST");
+  assert.equal(signedOut.status, 200);
+  assert.equal((await withAuth("/api/profile")).status, 401);
+  assert.equal((await withAuth("/api/episodes/email-private")).status, 404);
+});
+
+test("parallel guesses cannot exceed the email code attempt limit", async () => {
+  const guest = await visitor(false);
+  const email = "attempt-limit@example.com";
+  await guest.request("/api/auth/email/start", "POST", { email });
+  const loginCode = await setTestLoginCode(email);
+  const wrong = "00000000";
+  const guesses = await Promise.all(
+    Array.from({ length: 10 }, () =>
+      guest.request("/api/auth/email/verify", "POST", { email, code: wrong }),
+    ),
+  );
+  assert.ok(guesses.every((response) => response.status === 400));
+  const row = await db
+    .prepare("SELECT attempts FROM auth_codes WHERE email=?")
+    .bind(email)
+    .first();
+  assert.equal(row.attempts, 5);
+  assert.equal(
+    (
+      await guest.request("/api/auth/email/verify", "POST", {
+        email,
+        code: loginCode,
+      })
+    ).status,
+    400,
+  );
+});
+
+test("Google callback validates state and links a verified email to one account", async () => {
+  googleIdentity = {
+    sub: "google-sub-1",
+    email: "google-user@gmail.com",
+    email_verified: true,
+    name: "Google Listener",
+    picture: "https://lh3.googleusercontent.com/a/test",
+  };
+  const guest = await visitor(false);
+  const start = await mf.dispatchFetch(origin + "/api/auth/google", {
+    headers: { cookie: guest.cookie },
+    redirect: "manual",
+  });
+  assert.equal(start.status, 302);
+  const googleUrl = new URL(start.headers.get("location"));
+  assert.equal(
+    googleUrl.searchParams.get("redirect_uri"),
+    origin + "/api/auth/google/callback",
+  );
+  const state = googleUrl.searchParams.get("state");
+  const stateCookie = start.headers.get("set-cookie").split(";")[0];
+  const forged = await mf.dispatchFetch(
+    `${origin}/api/auth/google/callback?state=${state}&code=test`,
+    { headers: { cookie: guest.cookie } },
+  );
+  assert.equal(forged.status, 400);
+  const callback = await mf.dispatchFetch(
+    `${origin}/api/auth/google/callback?state=${state}&code=test`,
+    {
+      headers: {
+        cookie: `${guest.cookie}; ${stateCookie}`,
+        "sec-fetch-site": "cross-site",
+      },
+      redirect: "manual",
+    },
+  );
+  assert.equal(callback.status, 302, await callback.clone().text());
+  assert.equal(callback.headers.get("location"), origin + "/?profile=1");
+  const cookie = callback.headers
+    .get("set-cookie")
+    .match(/aside_auth=[a-f0-9]{64}/)?.[0];
+  assert.ok(cookie);
+  const profile = await guest.request("/api/profile", "GET", undefined, {
+    cookie: `${guest.cookie}; ${cookie}`,
+  });
+  assert.equal((await profile.json()).user.alias, "Google Listener");
+  const replay = await mf.dispatchFetch(
+    `${origin}/api/auth/google/callback?state=${state}&code=test`,
+    { headers: { cookie: `${guest.cookie}; ${stateCookie}` } },
+  );
+  assert.equal(replay.status, 400);
+});
+
+test("third-party Google email requires current email proof before linking", async () => {
+  googleIdentity = {
+    sub: "external-google-sub",
+    email: "external@example.com",
+    email_verified: true,
+    name: "External Listener",
+  };
+  const guest = await visitor(false);
+  const start = await mf.dispatchFetch(origin + "/api/auth/google", {
+    headers: { cookie: guest.cookie },
+    redirect: "manual",
+  });
+  const state = new URL(start.headers.get("location")).searchParams.get(
+    "state",
+  );
+  const stateCookie = start.headers.get("set-cookie").split(";")[0];
+  const rejected = await mf.dispatchFetch(
+    `${origin}/api/auth/google/callback?state=${state}&code=test`,
+    {
+      headers: { cookie: `${guest.cookie}; ${stateCookie}` },
+      redirect: "manual",
+    },
+  );
+  assert.equal(
+    rejected.headers.get("location"),
+    origin + "/?authError=email-verify",
+  );
+  const email = "external@example.com";
+  await guest.request("/api/auth/email/start", "POST", { email });
+  const loginCode = await setTestLoginCode(email);
+  const verified = await guest.request("/api/auth/email/verify", "POST", {
+    email,
+    code: loginCode,
+  });
+  assert.equal(verified.status, 200);
+  const auth = verified.headers.get("set-cookie").split(";")[0];
+  const linking = await mf.dispatchFetch(origin + "/api/auth/google", {
+    headers: { cookie: `${guest.cookie}; ${auth}` },
+    redirect: "manual",
+  });
+  const linkState = new URL(linking.headers.get("location")).searchParams.get(
+    "state",
+  );
+  const linkCookie = linking.headers.get("set-cookie").split(";")[0];
+  const linked = await mf.dispatchFetch(
+    `${origin}/api/auth/google/callback?state=${linkState}&code=test`,
+    {
+      headers: { cookie: `${guest.cookie}; ${linkCookie}` },
+      redirect: "manual",
+    },
+  );
+  assert.equal(linked.status, 302);
+  const identity = await db
+    .prepare(
+      "SELECT user_id FROM auth_identities WHERE provider='google' AND subject='external-google-sub'",
+    )
+    .first();
+  assert.equal(identity.user_id, (await verified.json()).user.id);
+});
+test("real Worker + D1/R2 isolate private episodes, public checkpoints and byte ranges", async () => {
+  const a = await visitor(),
+    b = await visitor();
+  await seed("private", a.id);
+  await seed("public", "curator", true);
+  assert.equal((await b.request("/api/episodes/private")).status, 404);
+  assert.equal((await b.request("/api/episodes/private/audio")).status, 404);
+  const list = await (await b.request("/api/episodes")).json();
+  assert.ok(list.some((e) => e.id === "public"));
+  assert.ok(!list.some((e) => e.id === "private"));
+  assert.equal(
+    (
+      await a.request("/api/episodes/public/checkpoint", "PUT", {
+        positionMs: 5000,
+        history: [],
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    await (await b.request("/api/episodes/public/checkpoint")).json(),
+    null,
+  );
+  assert.equal(
+    (await (await a.request("/api/episodes/public/checkpoint")).json())
+      .positionMs,
+    5000,
+  );
+  const range = await b.request(
+    "/api/episodes/public/audio",
+    "GET",
+    undefined,
+    { range: "bytes=2-5" },
+  );
+  assert.equal(range.status, 206);
+  assert.equal(await range.text(), "2345");
+  assert.equal(range.headers.get("content-range"), "bytes 2-5/10");
+  const suffix = await b.request(
+    "/api/episodes/public/audio",
+    "GET",
+    undefined,
+    { range: "bytes=-3" },
+  );
+  assert.equal(await suffix.text(), "789");
+  assert.equal(
+    (
+      await b.request("/api/episodes/public/audio", "GET", undefined, {
+        range: "bytes=99-",
+      })
+    ).status,
+    416,
+  );
+  assert.equal(
+    (
+      await b.request(
+        "/api/episodes/public/checkpoint",
+        "PUT",
+        { positionMs: 1, history: [] },
+        { origin: "https://evil.test" },
+      )
+    ).status,
+    403,
+  );
+});
+test("signed sessions cannot be forged; quota reservations are atomic under concurrency", async () => {
+  const a = await visitor();
+  await seed("secret", a.id);
+  const forged = a.cookie.replace(/.$/, "x");
+  assert.equal(
+    (
+      await mf.dispatchFetch(origin + "/api/episodes/secret", {
+        headers: { cookie: forged },
+      })
+    ).status,
+    404,
+  );
+  const store = new CloudStore(db, bucket);
+  const results = await Promise.allSettled(
+    Array.from({ length: 12 }, () => store.reserve("concurrent-test", 3)),
+  );
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 3);
+});
+test("multipart upload validates size/ownership and completes idempotently into a real Workflow", async () => {
+  const a = await signedInAccount(),
+    b = await signedInAccount();
+  const init = await a.request("/api/uploads", "POST", {
+    title: "Upload",
+    size: 44,
+  });
+  assert.equal(init.status, 201, await init.clone().text());
+  const upload = await init.json();
+  assert.equal(
+    (
+      await b.request(`/api/uploads/${upload.id}/complete`, "POST", {
+        parts: [],
+      })
+    ).status,
+    404,
+  );
+  const part = await mf.dispatchFetch(
+    origin + `/api/uploads/${upload.id}/part?number=1`,
+    {
+      method: "PUT",
+      headers: { cookie: a.cookie, origin },
+      body: new Uint8Array(44),
+    },
+  );
+  assert.equal(part.status, 200, await part.clone().text());
+  const parts = [await part.json()];
+  const complete = () =>
+    a.request(`/api/uploads/${upload.id}/complete`, "POST", { parts });
+  assert.equal((await complete()).status, 201);
+  assert.equal((await complete()).status, 201);
+  assert.equal((await bucket.head(`episodes/${upload.id}/original`)).size, 44);
+  const bindings = await mf.getBindings();
+  const instance = await bindings.ANALYSIS.get(upload.id);
+  for (let i = 0; i < 30; i++) {
+    if ((await instance.status()).status === "complete") break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal((await instance.status()).status, "complete");
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM test_jobs WHERE id=?")
+        .bind(upload.id)
+        .first()
+    ).n,
+    1,
+  );
+  const invalid = await a.request("/api/uploads", "POST", {
+    title: "Bad",
+    size: 50,
+  });
+  const second = await invalid.json();
+  const badPart = await mf.dispatchFetch(
+    origin + `/api/uploads/${second.id}/part?number=1`,
+    {
+      method: "PUT",
+      headers: { cookie: a.cookie, origin },
+      body: new Uint8Array(49),
+    },
+  );
+  assert.equal(badPart.status, 400);
+});
+test("upload quota allows five active or completed files per account and frees cancellations", async () => {
+  const guest = await visitor();
+  assert.equal(
+    (await guest.request("/api/uploads", "POST", { title: "Guest", size: 44 })).status,
+    401,
+  );
+  const a = await signedInAccount();
+  const starts = await Promise.all(
+    Array.from({ length: 8 }, (_, index) =>
+      a.request("/api/uploads", "POST", {
+        title: `Episode ${index + 1}`,
+        size: 44,
+      }),
+    ),
+  );
+  assert.equal(starts.filter((response) => response.status === 201).length, 5);
+  assert.equal(starts.filter((response) => response.status === 429).length, 3);
+  const accepted = await Promise.all(
+    starts.filter((response) => response.status === 201).map((response) => response.json()),
+  );
+  const anotherVisitor = await visitor(false);
+  const sameAccount = await anotherVisitor.request(
+    "/api/uploads",
+    "POST",
+    { title: "Same account, new visitor", size: 44 },
+    { cookie: `${anotherVisitor.cookie}; ${a.authCookie}` },
+  );
+  assert.equal(sameAccount.status, 429);
+  const b = await signedInAccount();
+  const otherAccount = await b.request("/api/uploads", "POST", {
+    title: "Other account",
+    size: 44,
+  });
+  assert.equal(otherAccount.status, 201, await otherAccount.clone().text());
+  assert.equal((await a.request(`/api/uploads/${accepted[0].id}`, "DELETE")).status, 200);
+  const replacement = await a.request("/api/uploads", "POST", {
+    title: "Replacement after cancellation",
+    size: 44,
+  });
+  assert.equal(replacement.status, 201, await replacement.clone().text());
+  const day = new Date().toISOString().slice(0, 10);
+  const quota = await db
+    .prepare("SELECT COUNT(*) AS count FROM uploads WHERE owner_id=? AND substr(created_at,1,10)=? AND state NOT IN ('aborted','rejected')")
+    .bind(a.id, day)
+    .first();
+  assert.equal(quota.count, 5);
+});
+test("parallel upload starts cannot exceed an account's storage cap", async () => {
+  const a = await signedInAccount();
+  const id = crypto.randomUUID();
+  await db.prepare("INSERT INTO uploads(id,owner_id,upload_id,object_key,title,size,created_at,state) VALUES(?,?,?,?,?,?,?,?)")
+    .bind(id, a.id, "old", `episodes/${id}/original`, "Old", 20 * 1024 ** 3 - 100, "2020-01-01T00:00:00.000Z", "complete").run();
+  const results = await Promise.all([0, 1].map(() =>
+    a.request("/api/uploads", "POST", { title: "New", size: 80 })));
+  assert.equal(results.filter((result) => result.status === 201).length, 1);
+  assert.equal(results.filter((result) => result.status === 429).length, 1);
+  const accepted = await results.find((result) => result.status === 201).json();
+  assert.equal((await a.request(`/api/uploads/${accepted.id}`, "DELETE")).status, 200);
+  await db.prepare("UPDATE uploads SET state='deleted' WHERE id=?").bind(id).run();
+});
+test("personal Space isolates accounts and deletion removes private data without refunding a completed upload", async () => {
+  const guest = await visitor(false);
+  assert.equal((await guest.request("/api/space/episodes")).status, 401);
+  const a = await signedInAccount(), b = await signedInAccount();
+  const id = crypto.randomUUID();
+  await seed(id, a.id);
+  await db.prepare("INSERT INTO uploads(id,owner_id,upload_id,object_key,title,size,created_at,state) VALUES(?,?,?,?,?,?,?,?)")
+    .bind(id, a.id, "uploaded", `episodes/${id}/original`, "Episode", 10, new Date().toISOString(), "complete")
+    .run();
+  await db.prepare("INSERT INTO checkpoints(owner_id,episode_id,value) VALUES(?,?,?)")
+    .bind(a.id, id, JSON.stringify({ positionMs: 1, revision: 0 })).run();
+  const listed = await a.request("/api/space/episodes");
+  assert.equal(listed.status, 200);
+  const page = await listed.json();
+  assert.ok(page.episodes.some((episode) => episode.id === id));
+  assert.equal(page.usedToday, 1);
+  assert.equal(page.dailyLimit, 5);
+  const otherPage = await (await b.request("/api/space/episodes")).json();
+  assert.ok(!otherPage.episodes.some((episode) => episode.id === id));
+  assert.equal((await b.request(`/api/space/episodes/${id}`, "DELETE")).status, 404);
+  assert.equal((await a.request(`/api/space/episodes/${id}`, "DELETE")).status, 200);
+  assert.equal((await a.request(`/api/episodes/${id}`)).status, 404);
+  assert.equal(await bucket.head(`episodes/${id}/original`), null);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM checkpoints WHERE episode_id=?").bind(id).first()).count, 0);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM artifacts WHERE key LIKE ?").bind(`episodes/${id}/%`).first()).count, 0);
+  assert.equal((await a.request("/api/space/episodes").then((response) => response.json())).usedToday, 1);
+});
+test("question stream, Live ownership and server-reserved quotas use network-only adapter", async () => {
+  const a = await visitor(),
+    b = await visitor();
+  const response = await a.request(
+    "/api/episodes/public/question",
+    "POST",
+    { atMs: 0, revision: 9, history: [{ role: "user", text: "Explain this" }] },
+    { accept: "application/x-ndjson" },
+  );
+  assert.equal(response.status, 200);
+  const events = (await response.text()).trim().split("\n").map(JSON.parse);
+  assert.equal(events.at(-1).type, "result");
+  assert.equal(events.at(-1).result.revision, 9);
+  const live = await (
+    await a.request("/api/episodes/public/live", "POST", {
+      sdp: "offer",
+      atMs: 0,
+    })
+  ).json();
+  const usage = { sessionId: live.session.id, seconds: 10, finalized: true };
+  assert.equal(
+    (await a.request("/api/episodes/public/usage", "POST", usage)).status,
+    200,
+  );
+  assert.equal(
+    (await b.request("/api/episodes/public/usage", "POST", usage)).status,
+    404,
+  );
+  assert.deepEqual(
+    await (await b.request("/api/episodes/public/usage")).json(),
+    [],
+  );
+  const day = new Date().toISOString().slice(0, 10);
+  await db
+    .prepare(
+      "INSERT INTO budgets VALUES(?,30) ON CONFLICT(bucket) DO UPDATE SET used=30",
+    )
+    .bind(`trial:${day}:live:${a.id}`)
+    .run();
+  const before = networkCalls.length;
+  assert.equal(
+    (
+      await a.request("/api/episodes/public/live", "POST", {
+        sdp: "offer",
+        atMs: 0,
+      })
+    ).status,
+    429,
+  );
+  assert.equal(networkCalls.length, before);
+});
+test("analysis retries reuse durable transcript/audio, survive temporary media loss and persist evidence", async () => {
+  const id = crypto.randomUUID();
+  await seed(id, "owner", false, false);
+  let transcriptions = 0,
+    enrichments = 0,
+    encodings = 0,
+    fail = true;
+  const provider = {
+    async transcribeAudio() {
+      transcriptions++;
+      return [
+        { id: "p1", startMs: 100, endMs: 900, text: "Hello", speaker: "s1" },
+      ];
+    },
+    async enrichAudio(_bytes, _passages, persist) {
+      enrichments++;
+      await persist(JSON.stringify({ raw: "evidence" }));
+      if (fail) throw Error("Temporary provider failure");
+      return {
+        summary: "Summary",
+        hostStyle: "Calm",
+        speakers: [],
+        groups: [{ firstId: "p1", lastId: "p1" }],
+      };
+    },
+  };
+  const media = {
+    async prepare() {
+      return {
+        durationMs: 1000,
+        mimeType: "audio/wav",
+        pauses: [],
+        plan: [{ offsetMs: 0, durationMs: 1000 }],
+      };
+    },
+    async chunk() {
+      encodings++;
+      return new TextEncoder().encode("encoded");
+    },
+    async cleanup() {},
+  };
+  const steps = { do: (_name, fn) => fn() };
+  await assert.rejects(
+    analyzeEpisode({ DB: db, AUDIO: bucket }, id, steps, media, provider),
+  );
+  assert.equal(
+    JSON.parse(
+      (
+        await db
+          .prepare("SELECT metadata FROM episodes WHERE id=?")
+          .bind(id)
+          .first()
+      ).metadata,
+    ).status,
+    "failed",
+  );
+  fail = false;
+  await analyzeEpisode(
+    { DB: db, AUDIO: bucket },
+    id,
+    steps,
+    {
+      ...media,
+      prepare() {
+        throw Error("Source container is gone");
+      },
+    },
+    provider,
+  );
+  assert.equal(transcriptions, 1);
+  assert.equal(encodings, 1);
+  assert.equal(enrichments, 2);
+  const store = new CloudStore(db, bucket),
+    episode = await store.episode(await store.row(id));
+  assert.equal(episode.status, "ready");
+  assert.equal(episode.analysis.passages[0].text, "Hello");
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT DISTINCT key FROM artifacts WHERE key>=? AND key<?")
+        .bind(
+          `episodes/${id}/analysis-v1/evidence-`,
+          `episodes/${id}/analysis-v1/evidence-\uffff`,
+        )
+        .all()
+    ).results.length,
+    2,
+  );
+});
+test("actual FFmpeg service probes, encodes, rejects invalid media and detects restart cache misses", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-container-test-"));
+  const app = mediaApp(root),
+    id = crypto.randomUUID();
+  try {
+    const wav = Buffer.alloc(44 + 4800);
+    wav.write("RIFF");
+    wav.writeUInt32LE(wav.length - 8, 4);
+    wav.write("WAVEfmt ", 8);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(24000, 24);
+    wav.writeUInt32LE(48000, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write("data", 36);
+    wav.writeUInt32LE(4800, 40);
+    const prepare = await app.inject({
+      method: "POST",
+      url: `/prepare?id=${id}`,
+      headers: { "content-type": "application/octet-stream" },
+      payload: wav,
+    });
+    assert.equal(prepare.statusCode, 200, prepare.body);
+    assert.equal(prepare.json().durationMs, 100);
+    const chunk = await app.inject(`/chunk?id=${id}&index=0`);
+    assert.equal(chunk.statusCode, 200);
+    assert.ok(chunk.rawPayload.length > 100);
+    assert.equal((await app.inject(`/chunk?id=${id}&index=1`)).statusCode, 400);
+    await app.inject({ method: "DELETE", url: `/source?id=${id}` });
+    assert.equal((await app.inject(`/chunk?id=${id}&index=0`)).statusCode, 409);
+    const bad = await app.inject({
+      method: "POST",
+      url: `/prepare?id=${id}`,
+      headers: { "content-type": "application/octet-stream" },
+      payload: Buffer.from("bad"),
+    });
+    assert.equal(bad.statusCode, 422);
+    assert.match(bad.json().error, /音轨/);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("real media probe accepts exactly five hours and rejects one second more before analysis", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-five-hour-test-"));
+  const app = mediaApp(root);
+  const makeWav = (seconds) => {
+    const wav = Buffer.alloc(44 + seconds, 128);
+    wav.write("RIFF");
+    wav.writeUInt32LE(wav.length - 8, 4);
+    wav.write("WAVEfmt ", 8);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(1, 24);
+    wav.writeUInt32LE(1, 28);
+    wav.writeUInt16LE(1, 32);
+    wav.writeUInt16LE(8, 34);
+    wav.write("data", 36);
+    wav.writeUInt32LE(seconds, 40);
+    return wav;
+  };
+  try {
+    const send = (seconds) => app.inject({
+      method: "POST",
+      url: `/prepare?id=${crypto.randomUUID()}`,
+      headers: { "content-type": "application/octet-stream" },
+      payload: makeWav(seconds),
+    });
+    const atLimit = await send(5 * 3600);
+    assert.equal(atLimit.statusCode, 200, atLimit.body);
+    assert.equal(atLimit.json().durationMs, 5 * 3600000);
+    const over = await send(5 * 3600 + 1);
+    assert.equal(over.statusCode, 422, over.body);
+    assert.match(over.json().error, /5 小时/);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("production Workflow orchestrates R2, model adapters, D1 and container binding", async () => {
+  const id = crypto.randomUUID();
+  await seed(id, "workflow-owner", false, false);
+  const bindings = await mf.getBindings();
+  const instance = await bindings.PROD_ANALYSIS.create({
+    id,
+    params: { episodeId: id },
+  });
+  for (let i = 0; i < 100; i++) {
+    const state = await instance.status();
+    if (["complete", "errored"].includes(state.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const state = await instance.status();
+  assert.equal(state.status, "complete", JSON.stringify(state));
+  const store = new CloudStore(db, bucket),
+    episode = await store.episode(await store.row(id));
+  assert.equal(episode.status, "ready");
+  assert.equal(episode.analysis.passages[0].text, "A sentence");
+});
+test("admission failure blocks an upload and removes its original before any model request", async () => {
+  const id = crypto.randomUUID();
+  await seed(id, "admission-owner", false, false);
+  await bucket.put(`episodes/${id}/original`, "invalid-long");
+  await db.prepare("INSERT INTO uploads(id,owner_id,upload_id,object_key,title,size,created_at,state) VALUES(?,?,?,?,?,?,?,?)")
+    .bind(id, "admission-owner", "complete", `episodes/${id}/original`, "Too long", 12, new Date().toISOString(), "complete").run();
+  const calls = networkCalls.length;
+  const bindings = await mf.getBindings();
+  const instance = await bindings.PROD_ANALYSIS.create({ id, params: { episodeId: id } });
+  await eventually(async () => ["errored", "complete"].includes((await instance.status()).status));
+  const episode = await new CloudStore(db, bucket).row(id);
+  assert.equal(JSON.parse(episode.metadata).status, "blocked");
+  assert.equal(JSON.parse(episode.metadata).error, "单个音频不能超过 5 小时");
+  assert.equal(await bucket.head(`episodes/${id}/original`), null);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM uploads WHERE id=?").bind(id).first()).count, 0);
+  assert.equal(networkCalls.length, calls);
+});
+
+test("repeated upload completion cannot restart failed analysis without a quota reservation", async () => {
+  const { startAnalysis } = await import("../../cloudflare/src/uploads.ts");
+  let restarts = 0;
+  const env = {
+    ANALYSIS: {
+      async create() {
+        throw Error("Already exists");
+      },
+      async get() {
+        return {
+          async status() {
+            return { status: "errored" };
+          },
+          async restart() {
+            restarts++;
+          },
+        };
+      },
+    },
+    DB: {
+      prepare() {
+        return {
+          bind() {
+            return { async run() {} };
+          },
+        };
+      },
+    },
+  };
+  await assert.rejects(
+    startAnalysis(env, "episode"),
+    (error) => error.status === 409,
+  );
+  await assert.rejects(
+    startAnalysis(env, "episode", async () => {
+      throw Error("No quota");
+    }),
+  );
+  assert.equal(restarts, 0);
+  await startAnalysis(env, "episode", async () => {});
+  assert.equal(restarts, 1);
+});
+
+async function eventually(check) {
+  for (let i = 0; i < 80; i++) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.fail("Timed out waiting for durable state");
+}
+test("trial proof is mandatory, bound to visitor/IP/hostname/action, and tokens cannot replay", async () => {
+  const a = await visitor(false);
+  const question = {
+    atMs: 0,
+    revision: 1,
+    history: [{ role: "user", text: "Explain" }],
+  };
+  let calls = networkCalls.length;
+  const missing = await a.request(
+    "/api/episodes/public/question",
+    "POST",
+    question,
+  );
+  assert.equal(missing.status, 403);
+  assert.equal((await missing.json()).code, "trial_verification_required");
+  assert.equal(networkCalls.length, calls);
+  assert.equal((await a.request("/api/episodes/public/audio")).status, 200);
+  for (const override of [
+    { hostname: "evil.test" },
+    { action: "other" },
+    { cdata: "other" },
+    { success: false },
+  ]) {
+    const result = await a.request("/api/trial", "POST", {
+      token: JSON.stringify({
+        cdata: a.id,
+        ...override,
+        nonce: crypto.randomUUID(),
+      }),
+    });
+    assert.equal(result.status, 403);
+  }
+  const token = JSON.stringify({ cdata: a.id, nonce: crypto.randomUUID() });
+  assert.equal((await a.request("/api/trial", "POST", { token })).status, 200);
+  const proof = await db.prepare("SELECT expires FROM trial_proofs WHERE owner=?").bind(a.id).first();
+  assert.ok(proof.expires > Date.now() + 5 * 60 * 60 * 1000);
+  assert.equal((await a.request("/api/trial", "POST", { token })).status, 403);
+  calls = networkCalls.length;
+  assert.equal(
+    (
+      await a.request("/api/episodes/public/question", "POST", question, {
+        "cf-connecting-ip": "203.0.113.10",
+      })
+    ).status,
+    403,
+  );
+  assert.equal(networkCalls.length, calls);
+  await db
+    .prepare("UPDATE trial_proofs SET expires=0 WHERE owner=?")
+    .bind(a.id)
+    .run();
+  assert.equal(
+    (await a.request("/api/episodes/public/question", "POST", question)).status,
+    403,
+  );
+});
+test("signed-in accounts skip Turnstile but retain paid question quotas", async () => {
+  const account = await signedInAccount();
+  const trial = await account.request("/api/trial");
+  assert.equal(trial.status, 200);
+  assert.equal((await trial.json()).verified, true);
+  const verifications = networkCalls.filter((path) => path.endsWith("/siteverify")).length;
+  const id = `account-trial-${crypto.randomUUID()}`;
+  await seed(id, account.id);
+  const payload = {
+    atMs: 0,
+    revision: 1,
+    history: [{ role: "user", text: "Explain" }],
+  };
+  for (let i = 0; i < 5; i++) {
+    const response = await account.request(`/api/episodes/${id}/question`, "POST", payload);
+    assert.equal(response.status, 200, await response.text());
+  }
+  assert.equal((await account.request(`/api/episodes/${id}/question`, "POST", payload)).status, 429);
+  assert.equal(networkCalls.filter((path) => path.endsWith("/siteverify")).length, verifications);
+});
+test("five question reservations are enforced before providers; kill switch preserves playback", async () => {
+  const a = await visitor();
+  const payload = {
+    atMs: 0,
+    revision: 1,
+    history: [{ role: "user", text: "Explain" }],
+  };
+  for (let i = 0; i < 5; i++) {
+    const response = await a.request(
+      "/api/episodes/public/question",
+      "POST",
+      payload,
+    );
+    assert.equal(response.status, 200, await response.text());
+  }
+  const before = networkCalls.length;
+  assert.equal(
+    (await a.request("/api/episodes/public/question", "POST", payload)).status,
+    429,
+  );
+  assert.equal(networkCalls.length, before);
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM trial_leases WHERE owner=?")
+        .bind(a.id)
+        .first()
+    ).n,
+    0,
+  );
+  await db.prepare("UPDATE trial_control SET enabled=0 WHERE id=1").run();
+  try {
+    assert.equal(
+      (await a.request("/api/episodes/public/question", "POST", payload))
+        .status,
+      503,
+    );
+    assert.equal((await a.request("/api/episodes/public/audio")).status, 200);
+    assert.equal(networkCalls.length, before);
+  } finally {
+    await db.prepare("UPDATE trial_control SET enabled=1 WHERE id=1").run();
+  }
+});
+test("parallel lease acquisition has one winner and stale releases cannot unlock another request", async () => {
+  const { acquire, release } = await import("../../cloudflare/src/trial.ts");
+  const env = { DB: db, AUDIO: bucket };
+  const owner = crypto.randomUUID();
+  const results = await Promise.allSettled(
+    Array.from({ length: 15 }, () => acquire(env, owner, "operation")),
+  );
+  const wins = results.filter((x) => x.status === "fulfilled");
+  assert.equal(wins.length, 1);
+  await release(env, owner, "operation", "stale");
+  await assert.rejects(acquire(env, owner, "operation"));
+  // A cold voice connection and its first transcription are legitimate parallel work.
+  const live = await acquire(env, owner, "live");
+  await release(env, owner, "operation", wins[0].value);
+  const next = await acquire(env, owner, "operation");
+  await release(env, owner, "operation", wins[0].value);
+  await assert.rejects(acquire(env, owner, "operation"));
+  await release(env, owner, "operation", next);
+  await release(env, owner, "live", live);
+});
+test("voice deadline sends server-side session.close without browser cooperation", async () => {
+  const a = await visitor();
+  const response = await a.request("/api/episodes/public/live", "POST", {
+    sdp: "offer",
+    atMs: 0,
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const session = (await response.json()).session.id;
+  const before = controlEvents.length;
+  const bindings = await mf.getBindings();
+  await bindings.LIVE.get(bindings.LIVE.idFromName(a.id)).expire();
+  await eventually(
+    async () =>
+      !(await db
+        .prepare("SELECT token FROM trial_leases WHERE owner=? AND kind='live'")
+        .bind(a.id)
+        .first()),
+  );
+  assert.ok(
+    controlEvents.slice(before).some((x) => x.type === "session.close"),
+  );
+  assert.equal(
+    (
+      await db
+        .prepare("SELECT finalized FROM voice_usage WHERE session_id=?")
+        .bind(session)
+        .first()
+    ).finalized,
+    1,
+  );
+});
+test("unconfirmed voice close retains lease and trips breaker despite browser finalization", async () => {
+  const a = await visitor();
+  const response = await a.request("/api/episodes/public/live", "POST", {
+    sdp: "offer",
+    atMs: 0,
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const session = (await response.json()).session.id;
+  const bindings = await mf.getBindings(),
+    supervisor = bindings.LIVE.get(bindings.LIVE.idFromName(a.id));
+  acknowledgeClose = false;
+  try {
+    assert.equal(
+      (
+        await a.request("/api/episodes/public/usage", "POST", {
+          sessionId: session,
+          seconds: 9999,
+          finalized: true,
+        })
+      ).status,
+      200,
+    );
+    await supervisor.expire();
+    assert.ok(
+      await db
+        .prepare("SELECT owner FROM trial_breakers WHERE owner=?")
+        .bind(a.id)
+        .first(),
+    );
+    assert.ok(
+      await db
+        .prepare("SELECT token FROM trial_leases WHERE owner=? AND kind='live'")
+        .bind(a.id)
+        .first(),
+    );
+    const usage = await db
+      .prepare("SELECT finalized,seconds FROM voice_usage WHERE session_id=?")
+      .bind(session)
+      .first();
+    assert.equal(usage.finalized, 0);
+    assert.equal(usage.seconds, 120);
+    const before = networkCalls.length;
+    assert.equal(
+      (
+        await a.request("/api/episodes/public/live", "POST", {
+          sdp: "offer",
+          atMs: 0,
+        })
+      ).status,
+      503,
+    );
+    assert.equal(networkCalls.length, before);
+  } finally {
+    acknowledgeClose = true;
+    await supervisor.expire();
+    await eventually(
+      async () =>
+        !(await db
+          .prepare("SELECT owner FROM trial_breakers WHERE owner=?")
+          .bind(a.id)
+          .first()),
+    );
+  }
+});
+test("oversized history and malformed/long WAV are rejected before any model call", async () => {
+  const { validateWav } = await import("../../cloudflare/src/trial.ts");
+  const wav = (seconds) => {
+    const data = Buffer.alloc(44 + 16000 * 2 * seconds);
+    data.write("RIFF");
+    data.writeUInt32LE(data.length - 8, 4);
+    data.write("WAVEfmt ", 8);
+    data.writeUInt32LE(16, 16);
+    data.writeUInt16LE(1, 20);
+    data.writeUInt16LE(1, 22);
+    data.writeUInt32LE(16000, 24);
+    data.writeUInt32LE(32000, 28);
+    data.writeUInt16LE(2, 32);
+    data.writeUInt16LE(16, 34);
+    data.write("data", 36);
+    data.writeUInt32LE(data.length - 44, 40);
+    return data;
+  };
+  validateWav(wav(30));
+  assert.throws(() => validateWav(wav(31)));
+  const forged = wav(31);
+  forged.writeUInt32LE(320000, 28);
+  assert.throws(() => validateWav(forged));
+  const a = await visitor(),
+    before = networkCalls.length;
+  assert.equal(
+    (
+      await a.request("/api/episodes/public/question", "POST", {
+        atMs: 0,
+        revision: 1,
+        history: [{ role: "user", text: "x".repeat(2001) }],
+      })
+    ).status,
+    413,
+  );
+  const body = new FormData();
+  body.append(
+    "audio",
+    new Blob([wav(31)], { type: "audio/wav" }),
+    "question.wav",
+  );
+  const encoded = new Request(
+    origin + "/api/episodes/public/transcribe-question",
+    { method: "POST", body },
+  );
+  const rejected = await mf.dispatchFetch(encoded.url, {
+    method: "POST",
+    headers: {
+      cookie: a.cookie,
+      origin,
+      "content-type": encoded.headers.get("content-type"),
+    },
+    body: await encoded.arrayBuffer(),
+  });
+  assert.equal(rejected.status, 413, await rejected.text());
+  assert.equal(networkCalls.length, before);
+});
+
+test("definitively rejected Live request consumes quota but releases concurrency without global breaker", async () => {
+  const a = await visitor();
+  rejectLive = true;
+  try {
+    assert.equal(
+      (
+        await a.request("/api/episodes/public/live", "POST", {
+          sdp: "invalid",
+          atMs: 0,
+        })
+      ).status,
+      503,
+    );
+    assert.equal(
+      await db
+        .prepare("SELECT token FROM trial_leases WHERE owner=?")
+        .bind(a.id)
+        .first(),
+      null,
+    );
+    assert.equal(
+      await db
+        .prepare("SELECT owner FROM trial_breakers WHERE owner=?")
+        .bind(a.id)
+        .first(),
+      null,
+    );
+    const day = new Date().toISOString().slice(0, 10);
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT used FROM budgets WHERE bucket=?")
+          .bind(`trial:${day}:live:${a.id}`)
+          .first()
+      ).used,
+      1,
+    );
+  } finally {
+    rejectLive = false;
+  }
+});
+
+test("D1 stores large Unicode artifacts atomically and keeps structured data out of R2", async () => {
+  const records = new CloudStore(db, bucket).records;
+  const key = "large-artifact",
+    value = { transcript: "你😀".repeat(400000) };
+  await records.put(key, value);
+  assert.deepEqual(await records.get(key), value);
+  assert.ok(
+    (
+      await db
+        .prepare("SELECT COUNT(*) AS n FROM artifacts WHERE key=?")
+        .bind(key)
+        .first()
+    ).n > 1,
+  );
+  await db
+    .prepare(
+      "CREATE TRIGGER fail_record BEFORE INSERT ON artifacts WHEN NEW.key='large-artifact' AND NEW.part=1 BEGIN SELECT RAISE(ABORT,'test interrupted write'); END",
+    )
+    .run();
+  try {
+    await assert.rejects(
+      records.put(key, { transcript: "replacement".repeat(15000) }),
+    );
+    assert.deepEqual(await records.get(key), value);
+  } finally {
+    await db.prepare("DROP TRIGGER fail_record").run();
+  }
+  assert.equal(await bucket.head(key), null);
+});

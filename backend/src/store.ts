@@ -1,12 +1,18 @@
+import { SqliteObjects } from "./object-storage.js";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Episode } from "@aside/engine/core";
 export class Store {
   readonly db: DatabaseSync;
+  readonly objects: SqliteObjects;
   constructor(readonly root: string) {
     mkdirSync(root, { recursive: true });
     this.db = new DatabaseSync(resolve(root, "aside.sqlite"));
+    this.objects = new SqliteObjects(this.db);
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS artifacts(episode_id TEXT NOT NULL,name TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(episode_id,name))",
+    );
     this.db.exec(
       "PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS episodes(id TEXT PRIMARY KEY, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS checkpoints(id TEXT PRIMARY KEY, json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS voice_usage(id TEXT PRIMARY KEY, episode_id TEXT NOT NULL, seconds REAL NOT NULL, finalized INTEGER NOT NULL);",
     );
@@ -59,9 +65,18 @@ export class Store {
       )
       .all(episodeId);
   }
-  dir(id: string) {
-    if (!/^[a-zA-Z0-9-]+$/.test(id)) throw Error("Invalid episode ID");
-    return resolve(this.root, id);
+  artifact<T>(episode: string, name: string): T | undefined {
+    const row = this.db
+      .prepare("SELECT json FROM artifacts WHERE episode_id=? AND name=?")
+      .get(episode, name);
+    return row ? (JSON.parse(String(row.json)) as T) : undefined;
+  }
+  saveArtifact(episode: string, name: string, value: unknown) {
+    this.db
+      .prepare(
+        "INSERT INTO artifacts VALUES(?,?,?) ON CONFLICT(episode_id,name) DO UPDATE SET json=excluded.json",
+      )
+      .run(episode, name, JSON.stringify(value));
   }
   close() {
     this.db.close();

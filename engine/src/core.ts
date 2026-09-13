@@ -1,4 +1,6 @@
 export type Voice = "masculine" | "feminine" | "unknown";
+export const MAX_AUDIO_DURATION_MS = 5 * 60 * 60 * 1000;
+export const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
 export interface Word {
   text: string;
   startMs: number;
@@ -37,6 +39,16 @@ export interface Analysis {
   source: "provider" | "demo";
 }
 export interface Episode {
+  attribution?: {
+    publisher: string;
+    author: string;
+    sourceUrl: string;
+    licenseUrl: string;
+    license: string;
+    language: string;
+    excerptStartMs: number;
+    excerptEndMs: number;
+  };
   mimeType?: string;
   id: string;
   title: string;
@@ -213,6 +225,8 @@ export function explicitResume(text: string): boolean {
 }
 
 export interface MicrophoneConfig {
+  /** Client recording cap; paid endpoints independently validate audio length. */
+  maxCaptureMs?: number;
   vadEnabled?: boolean;
   vadThreshold?: number;
   vadMinRms?: number;

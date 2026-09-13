@@ -1,3 +1,4 @@
+import { t, useLocale } from "./i18n";
 import React, { useEffect, useRef, useState } from "react";
 import type { Passage } from "@aside/engine/core";
 
@@ -7,13 +8,17 @@ const time = (ms: number) =>
 export function Transcript({
   passages,
   positionMs,
+  onSeek,
 }: {
   passages: Passage[];
   positionMs: number;
+  onSeek: (atMs: number) => void;
 }) {
+  useLocale();
   const viewport = useRef<HTMLDivElement>(null);
   const activeLine = useRef<HTMLParagraphElement>(null);
   const [following, setFollowing] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const activeIndex = passages.findLastIndex((p) => p.startMs <= positionMs);
   useEffect(() => {
     const box = viewport.current;
@@ -35,15 +40,15 @@ export function Transcript({
   return (
     <>
       <div className="panel-heading">
-        <h2>节目逐字稿</h2>
+        <h2>{t("节目逐字稿")}</h2>
         {following ? (
-          <span>跟随播放</span>
+          <span>{t("跟随播放")}</span>
         ) : (
           <button
             className="transcript-follow"
             onClick={() => setFollowing(true)}
           >
-            回到当前播放
+            {t("回到当前播放")}
           </button>
         )}
       </div>
@@ -52,7 +57,7 @@ export function Transcript({
         ref={viewport}
         tabIndex={0}
         role="region"
-        aria-label="节目逐字稿"
+        aria-label={t("节目逐字稿")}
         onWheel={() => setFollowing(false)}
         onTouchStart={() => setFollowing(false)}
         onPointerDown={() => setFollowing(false)}
@@ -77,15 +82,32 @@ export function Transcript({
               key={p.id}
               ref={i === activeIndex ? activeLine : undefined}
               aria-current={i === activeIndex ? "true" : undefined}
-              className={`transcript-line${i === activeIndex ? " is-current" : i < activeIndex ? " is-past" : ""}`}
+              className={`transcript-line${i === activeIndex ? " is-current" : i < activeIndex ? " is-past" : ""}${selectedId === p.id ? " is-selected" : ""}`}
+              onClick={() => setSelectedId(p.id)}
             >
-              <span className="transcript-time">{time(p.startMs)}</span>
+              <span className="transcript-cue">
+                <span className="transcript-time">{time(p.startMs)}</span>
+                <button
+                  type="button"
+                  className="transcript-jump"
+                  aria-label={`${t("从这句播放")} ${time(p.startMs)}`}
+                  title={`${t("从这句播放")} · ${time(p.startMs)}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedId(null);
+                    setFollowing(true);
+                    onSeek(p.startMs);
+                  }}
+                >
+                  ▶
+                </button>
+              </span>
               <span>{p.text}</span>
             </p>
           ))
         ) : (
           <p className="transcript-empty">
-            音频分析完成后，逐字稿会出现在这里。
+            {t("音频分析完成后，逐字稿会出现在这里。")}
           </p>
         )}
       </div>

@@ -67,7 +67,9 @@ export class LocalMicrophone implements MicrophonePort {
             if (this.stopped) return;
             const event = this.buffer!.push(frame, probabilities.isSpeech);
             if (event === "overflow")
-              this.onError("首句录音超过 60 秒，请分成较短的问题。");
+              this.onError(
+                `首句录音超过 ${(this.config.maxCaptureMs ?? 60000) / 1000} 秒，请分成较短的问题。`,
+              );
             else if (event) this.onSpeech(event === "start");
           },
         });
@@ -93,7 +95,9 @@ export class LocalMicrophone implements MicrophonePort {
         if (this.stopped) return;
         const event = this.buffer!.push(e.data);
         if (event === "overflow")
-          this.onError("首句录音超过 60 秒，请分成较短的问题。");
+          this.onError(
+            `首句录音超过 ${(this.config.maxCaptureMs ?? 60000) / 1000} 秒，请分成较短的问题。`,
+          );
         else if (event) this.onSpeech(event === "start");
       };
       this.source = context.createMediaStreamSource(stream);
@@ -137,4 +141,10 @@ export class LocalMicrophone implements MicrophonePort {
     if (this.context?.state !== "closed") void this.context?.close();
     this.buffer?.clear();
   }
+}
+
+/** Ask at entry, then release the device until the user starts playback. */
+export async function requestMicrophonePermission(): Promise<void> {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  stream.getTracks().forEach((track) => track.stop());
 }

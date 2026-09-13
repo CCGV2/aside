@@ -5,6 +5,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:5173",
     channel: "chrome",
     headless: true,
+    locale: "zh-CN",
     viewport: { width: 1440, height: 1000 },
   },
   workers: 1,

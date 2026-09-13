@@ -1,10 +1,6 @@
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
-import { mkdir, stat, readFile, writeFile, rename, rm } from "node:fs/promises";
-import { createReadStream, createWriteStream } from "node:fs";
-import { pipeline } from "node:stream/promises";
-import { join } from "node:path";
 import { z } from "zod";
 import type { Episode } from "@aside/engine/core";
 import { questionSchema, liveSchema, checkpointSchema } from "./contracts.js";
@@ -15,7 +11,8 @@ import {
   questionResultSchema,
   type QuestionEvent,
 } from "@aside/engine/contracts";
-import { Jobs, probeAudio } from "./jobs.js";
+import { Jobs } from "./jobs.js";
+import { withMedia } from "./local-media.js";
 import { readMicrophoneConfig, readVoiceLifecycleConfig } from "./config.js";
 export function createApp(store: Store, services?: BackendServices) {
   const microphone = readMicrophoneConfig();
@@ -67,13 +64,15 @@ export function createApp(store: Store, services?: BackendServices) {
     const file = await req.file();
     if (!file) throw Error("请选择音频文件");
     const id = crypto.randomUUID();
-    const dir = store.dir(id);
-    await mkdir(dir, { recursive: true });
+    const key = `episodes/${id}/original`;
     try {
-      await pipeline(file.file, createWriteStream(join(dir, "upload")));
+      await store.objects.put(key, file.file);
       if (file.file.truncated) throw Error("音频超过 500 MB");
-      await rename(join(dir, "upload"), join(dir, "original"));
-      const { durationMs, mimeType } = await probeAudio(join(dir, "original"));
+      const { durationMs, mimeType } = await withMedia(
+        store.objects,
+        key,
+        (media) => media.probe(),
+      );
       const e: Episode = {
         id,
         title: file.filename.replace(/\.[^.]+$/, "").slice(0, 200),
@@ -88,7 +87,7 @@ export function createApp(store: Store, services?: BackendServices) {
       void jobs.drain();
       return reply.code(201).send(e);
     } catch (err) {
-      await rm(dir, { recursive: true, force: true });
+      store.objects.delete(key);
       throw err;
     }
   });
@@ -109,8 +108,10 @@ export function createApp(store: Store, services?: BackendServices) {
     "/api/episodes/:id/audio",
     async (req, reply) => {
       const episode = get(req.params.id);
-      const path = join(store.dir(req.params.id), "original");
-      const { size } = await stat(path);
+      const key = `episodes/${req.params.id}/original`;
+      const object = store.objects.head(key);
+      if (!object) throw Error("音频不存在");
+      const { size } = object;
       reply
         .header("Accept-Ranges", "bytes")
         .type(episode.mimeType ?? "audio/mpeg");
@@ -139,9 +140,11 @@ export function createApp(store: Store, services?: BackendServices) {
           .code(206)
           .header("Content-Range", `bytes ${start}-${end}/${size}`)
           .header("Content-Length", end - start + 1)
-          .send(createReadStream(path, { start, end }));
+          .send(Readable.from(store.objects.read(key, start, end)));
       }
-      return reply.header("Content-Length", size).send(createReadStream(path));
+      return reply
+        .header("Content-Length", size)
+        .send(Readable.from(store.objects.read(key)));
     },
   );
   app.get<{ Params: { id: string } }>(
@@ -178,19 +181,13 @@ export function createApp(store: Store, services?: BackendServices) {
         if (!reply.raw.writableEnded) controller.abort();
       };
       reply.raw.on("close", onClose);
-      const taskPath = join(
-        store.dir(e.id),
-        `question-${crypto.randomUUID()}.json`,
-      );
-      await writeFile(
-        taskPath,
-        JSON.stringify({
-          status: "running",
-          revision: q.revision,
-          history: q.history,
-          atMs: q.atMs,
-        }),
-      );
+      const taskId = `question-${crypto.randomUUID()}`;
+      store.saveArtifact(e.id, taskId, {
+        status: "running",
+        revision: q.revision,
+        history: q.history,
+        atMs: q.atMs,
+      });
       const streaming = req.headers.accept?.includes("application/x-ndjson");
       const stream = streaming ? new PassThrough() : undefined;
       const send = (event: QuestionEvent) => {
@@ -211,13 +208,10 @@ export function createApp(store: Store, services?: BackendServices) {
             (phase) => send({ type: "progress", revision: q.revision, phase }),
           ),
         );
-        await writeFile(
-          taskPath,
-          JSON.stringify({
-            status: controller.signal.aborted ? "superseded" : "completed",
-            ...result,
-          }),
-        );
+        store.saveArtifact(e.id, taskId, {
+          status: controller.signal.aborted ? "superseded" : "completed",
+          ...result,
+        });
         if (stream) {
           send({ type: "result", result });
           stream.end();
@@ -225,13 +219,10 @@ export function createApp(store: Store, services?: BackendServices) {
         }
         return result;
       } catch (error) {
-        await writeFile(
-          taskPath,
-          JSON.stringify({
-            status: controller.signal.aborted ? "superseded" : "failed",
-            revision: q.revision,
-          }),
-        );
+        store.saveArtifact(e.id, taskId, {
+          status: controller.signal.aborted ? "superseded" : "failed",
+          revision: q.revision,
+        });
         if (stream) {
           send({
             type: "error",

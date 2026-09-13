@@ -14,7 +14,7 @@ export async function findSilences(path: string) {
       "null",
       "-",
     ],
-    { timeout: 180000, maxBuffer: 8 * 1024 * 1024 },
+    { timeout: 25 * 60000, maxBuffer: 8 * 1024 * 1024 },
   );
   const pauses: { startMs: number; endMs: number }[] = [];
   let start: number | undefined;

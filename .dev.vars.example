@@ -1,0 +1,11 @@
+# Local Cloudflare runtime only. Generate a random secret with at least 32 characters.
+SESSION_SECRET=replace-with-random-secret-at-least-32-characters
+OPENAI_API_KEY=
+
+# Cloudflare Turnstile server secret; site key belongs in wrangler vars.
+TURNSTILE_SECRET_KEY=
+
+# Email sending uses the simulated Cloudflare EMAIL binding in wrangler.jsonc.
+# Google sign-in needs a Web OAuth client.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

@@ -10,20 +10,37 @@
   "scripts": {
     "dev": "concurrently -k -n api,web \"npm run dev -w @aside/backend\" \"npm run dev -w @aside/frontend\"",
     "build": "npm run check && npm run build -w @aside/frontend",
-    "check": "tsc --noEmit && node scripts/check-boundaries.mjs",
+    "check": "tsc --noEmit && node scripts/check-boundaries.mjs && npm run check:cloudflare",
     "test": "node --import tsx --test tests/*.test.ts",
     "demo": "node --import tsx scripts/create-demo.ts",
     "format": "prettier --write engine backend frontend scripts tests *.json",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:cloudflare": "tsc --noEmit -p cloudflare/tsconfig.json",
+    "dev:cloudflare": "wrangler dev",
+    "db:cloudflare:local": "wrangler d1 migrations apply DB --local",
+    "build:cloudflare": "npm run build && wrangler deploy --dry-run --containers-rollout=none --outdir .wrangler/build",
+    "test:cloudflare": "node --import tsx --test tests/cloudflare/*.test.mjs",
+    "build:media": "docker build --platform linux/amd64 -f cloudflare/Dockerfile -t aside-media:local .",
+    "migrate:storage": "node --import tsx scripts/migrate-storage.ts",
+    "deploy:cloudflare": "npm run build && wrangler deploy --config wrangler.production.jsonc",
+    "db:cloudflare:production": "wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc",
+    "export:demo": "node --import tsx scripts/export-public-demo.ts"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260911.1",
     "@playwright/test": "^1.55.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "concurrently": "^9.0.0",
+    "esbuild": "^0.28.2",
+    "miniflare": "^5.20260911.0-alpha",
     "prettier": "^3.9.6",
     "tsx": "^4.0.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "wrangler": "^4.131.1"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
   }
 }

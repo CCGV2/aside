@@ -24,6 +24,7 @@ Aside 是一个可以用语音打断的播客播放器。它先分析整期音�
 - **从容续播**：可选回答后等 3 秒、8 秒或手动继续；较长回答至少留 8 秒。倒计时中点击“先别继续”，这一轮追问结束后仍会等你主动继续。说 “continue / go on / 继续” 后约 1.5 秒续播，从语义断点回退开始。
 - **歌词式 Transcript**：全文展示、当前段落高亮、自动跟随；聊天自动滚到底部。播放时收起顶部区域，暂停时动画展开。
 - **按需连接 Live**：日常监听在浏览器本地完成，提问时才建立云端语音会话；续播后短暂保留，再自动关闭。
+- **个人 Space（Cloudflare 版）**：通过邮件或 Google 登录，编辑头像、昵称和介绍；左侧查看自己上传的音频，右侧直接使用播放器、逐字稿和该音频的对话记录。上传单篇最长 5 小时、最大 1 GiB，完成后自动分析；每账号每 UTC 日最多 5 篇。
 
 ## 🚀 本地启动
 
@@ -56,16 +57,16 @@ npm run demo
 
 完整示例见 [`.env.example`](.env.example)。修改后重启开发服务，刷新网页。
 
-| 配置 | 默认值 | 用途 |
-| --- | --- | --- |
-| `ASIDE_BACKEND_MODEL` | `gpt-5.6-terra` | 后端问答模型 |
-| `ASIDE_MIC_VAD_THRESHOLD` | `0.8` | 本地人声概率阈值，越高越保守 |
-| `ASIDE_MIC_VAD_MIN_RMS` | `0.003` | VAD 模式的静音过滤底线 |
-| `ASIDE_MIC_MIN_SPEECH_MS` | `120` | 连续人声达到此时长才打断 |
-| `ASIDE_MIC_SILENCE_MS` | `650` | 判断一句话结束的静音时长 |
-| `ASIDE_AUTO_RESUME_MS` | `3000` | 回答结束后的追问等待时间；`0` 禁用 |
-| `ASIDE_LIVE_GRACE_MS` | `5000` | 续播后保留 Live 会话的时间 |
-| `ASIDE_LIVE_IDLE_CLOSE_MS` | `60000` | 空闲 Live 会话关闭时间 |
+| 配置                       | 默认值          | 用途                               |
+| -------------------------- | --------------- | ---------------------------------- |
+| `ASIDE_BACKEND_MODEL`      | `gpt-5.6-terra` | 后端问答模型                       |
+| `ASIDE_MIC_VAD_THRESHOLD`  | `0.8`           | 本地人声概率阈值，越高越保守       |
+| `ASIDE_MIC_VAD_MIN_RMS`    | `0.003`         | VAD 模式的静音过滤底线             |
+| `ASIDE_MIC_MIN_SPEECH_MS`  | `120`           | 连续人声达到此时长才打断           |
+| `ASIDE_MIC_SILENCE_MS`     | `650`           | 判断一句话结束的静音时长           |
+| `ASIDE_AUTO_RESUME_MS`     | `3000`          | 回答结束后的追问等待时间；`0` 禁用 |
+| `ASIDE_LIVE_GRACE_MS`      | `5000`          | 续播后保留 Live 会话的时间         |
+| `ASIDE_LIVE_IDLE_CLOSE_MS` | `60000`         | 空闲 Live 会话关闭时间             |
 
 页面中的插话方式和续播等待会保存在当前浏览器。选择过续播等待后，它优先于服务端 `ASIDE_AUTO_RESUME_MS`；长回答的延长等待不会覆盖“手动继续”。“开发观察”保留最近 20 次语音回答延迟，区分首次连接和连续追问，计时从本地检测到问题结束至首次回答音频，不包含等待提示。
 
@@ -75,7 +76,7 @@ npm run demo
 
 ```text
 engine/       领域类型、播放状态机、续播点、上下文与检索规则
-backend/      HTTP API、分析任务、模型接入、SQLite 和音频文件
+backend/      HTTP API、分析任务、模型接入、SQLite 记录与分块音频存储
 frontend/     播放器、Transcript、本地麦克风、WebRTC 与交互
 scripts/      演示数据、VAD 资源准备、依赖边界检查
 tests/        单元/API 测试与浏览器集成测试
@@ -83,6 +84,9 @@ tests/        单元/API 测试与浏览器集成测试
 ```
 
 - [架构说明](.docs/architecture.md)：模块边界、分析与问答链路、会话生命周期、存储与限制。
+- [Cloudflare 后端](.docs/cloudflare.md)：Workers、D1、R2、Workflows、音频容器与部署步骤。
+- [用户账号与个人资料](.docs/accounts.md)：邮件/Google 登录、profile、配置与上线边界。
+- [个人 Space](.docs/personal-space.md)：上传、私人音频库、额度与删除清理。
 - [开发与验证](.docs/development.md)：运行命令、测试前提、配置和故障定位。
 - [ADR 0001 · 初始架构](.docs/adr/0001-interactive-podcast-architecture.md)
 - [ADR 0002 · 按需 Live 会话](.docs/adr/0002-on-demand-live-sessions.md)
@@ -99,10 +103,18 @@ npm run build     # 类型、模块边界检查及前端构建
 
 ## 当前边界
 
-这是单用户本地原型。分析任务目前串行执行，长节目需要等待；已完成的分块会缓存，失败后可以重试。多人播客统一使用一个预设声音，人物口吻与语言跟随依赖模型表现。
+本地 Fastify 模式是单用户开发模式。分析任务目前串行执行，长节目需要等待；已完成的分块会缓存，失败后可以重试。多人播客统一使用一个预设声音，人物口吻与语言跟随依赖模型表现。
 
-`.env`、上传音频、分析缓存、数据库、测试产物和生成的 VAD 资源均不进入 Git。音频分析、提问和云端语音交互会将相应内容发送给模型服务；本地 VAD 监听本身不上传音频。当前服务没有面向公网的用户认证，部署方案尚未完成。
+`.env`、上传音频、分析缓存、数据库、测试产物和生成的 VAD 资源均不进入 Git。音频分析、提问和云端语音交互会将相应内容发送给模型服务；本地 VAD 监听本身不上传音频。Cloudflare 站点已部署匿名试听、账号、profile 与个人 Space；新版 D1 迁移、媒体 Container 和上传开关的发布记录见[生产部署](.docs/deployment.md)。`npm run dev` 仍是单用户 Fastify 开发模式，账号和 Space 的本地验证使用 Cloudflare Worker 模拟环境。
 
 ## 📄 License
 
 本项目采用 [Apache License 2.0](LICENSE)。第三方依赖及其模型资源遵循各自的许可证。
+
+### 存储与旧数据迁移
+
+本地持久数据统一在 `.data/aside.sqlite`（可用 `ASIDE_DATA_DIR` 改目录）：节目、逐字稿、分析缓存、问答记录、模型证据和原音频都通过数据库存取。音频按块存储，上传和 Range 播放不需要一次载入整期音频。FFmpeg 只使用运行期间的临时目录。
+
+升级已有项目时，先停止旧后端，再执行一次 `npm run migrate:storage`，然后启动新版本。命令会先备份 SQLite，将旧节目目录中的原音频和处理记录导入数据库，校验音频哈希；可以重复执行，不会覆盖新数据库中已有的记录，也不会删除旧文件。新服务不会回退读取旧目录。新安装无需执行迁移。
+
+云端采用 D1 保存所有文本、分析和状态，R2 保存音频；应用全部 D1 migrations 后再部署。详见 [存储设计与迁移](.docs/storage.md)。

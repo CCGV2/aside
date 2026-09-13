@@ -14,7 +14,7 @@ export class MicrophoneBuffer {
     readonly sampleRate: number,
     private config: MicrophoneConfig,
     preRollMs: number,
-    private maxCaptureMs = 60000,
+    private maxCaptureMs = config.maxCaptureMs ?? 60000,
   ) {
     this.ring = new Float32Array(Math.ceil((sampleRate * preRollMs) / 1000));
   }

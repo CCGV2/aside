@@ -31,11 +31,9 @@ test("persistent progress, byte ranges, API validation and credential boundary",
     stage: "ready",
     progress: 1,
   });
-  await mkdir(store.dir("test"));
-  await writeFile(
-    join(store.dir("test"), "original"),
+  await store.objects.put("episodes/test/original", [
     Buffer.from("0123456789"),
-  );
+  ]);
   const app = createApp(store);
   try {
     assert.equal(
@@ -215,7 +213,6 @@ test("first-question upload uses transient WAV; new Live request forwards conver
       voiceReason: "test",
     },
   });
-  await mkdir(store.dir("test"));
   const app = createApp(store, fakeServices({ voice }));
   try {
     const wav = Buffer.alloc(48);
@@ -295,7 +292,6 @@ test("question endpoint streams progress and terminal success or error, preservi
       source: "provider",
     },
   });
-  await mkdir(store.dir("progress"));
   const app = createApp(store, fakeServices({ questions }));
   const payload = {
     revision: 7,

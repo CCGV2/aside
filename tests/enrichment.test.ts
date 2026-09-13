@@ -15,11 +15,14 @@ const valid = {
 };
 test("enrichment repairs missing commas and retains original evidence", async () => {
   const dir = await mkdtemp(join(tmpdir(), "aside-json-"));
-  const artifact = join(dir, "raw.json");
+  let evidence = "";
+  const artifact = async (value: string) => {
+    evidence = value;
+  };
   try {
     const raw = JSON.stringify(valid).replace(',"hostStyle"', '\n"hostStyle"');
     assert.deepEqual(await parseEnrichment(raw, "stop", artifact), valid);
-    const saved = JSON.parse(await readFile(artifact, "utf8"));
+    const saved = JSON.parse(evidence);
     assert.equal(saved.raw, raw);
     assert.equal(saved.repaired, true);
     assert.equal(saved.status, "validated");
@@ -37,7 +40,10 @@ test("enrichment repairs missing commas and retains original evidence", async ()
 });
 test("enrichment rejects incomplete, refused and schema-invalid output while saving evidence", async () => {
   const dir = await mkdtemp(join(tmpdir(), "aside-json-"));
-  const artifact = join(dir, "raw.json");
+  let evidence = "";
+  const artifact = async (value: string) => {
+    evidence = value;
+  };
   try {
     for (const [raw, reason] of [
       [JSON.stringify(valid), "length"],
@@ -57,7 +63,7 @@ test("enrichment rejects incomplete, refused and schema-invalid output while sav
         parseEnrichment(raw, reason, artifact),
         /原始回复已保存/,
       );
-      const saved = JSON.parse(await readFile(artifact, "utf8"));
+      const saved = JSON.parse(evidence);
       assert.equal(saved.status, "invalid");
       assert.equal(saved.raw, raw);
     }

@@ -6,6 +6,43 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test("transcript sentence cue seeks and starts playback in the bottom player", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /给思考留一点空间/ }).click();
+  // The mic-permission alert appears shortly after entering and shifts the
+  // transcript down; wait for it before hovering or the hover target moves.
+  await page
+    .locator(".alert")
+    .waitFor({ state: "visible", timeout: 4000 })
+    .catch(() => {});
+  const transcript = page.getByRole("region", { name: "节目逐字稿" });
+  const passages = (await (await page.request.get("/api/episodes/demo-natural-resume")).json()).analysis.passages as { startMs: number }[];
+  const line = transcript.locator(".transcript-line").nth(4);
+  await line.scrollIntoViewIfNeeded();
+  await line.hover();
+  const jump = line.getByRole("button", { name: /从这句播放/ });
+  await expect(jump).toHaveCSS("opacity", "1");
+  await jump.click();
+  await expect.poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.paused)).toBe(false);
+  await expect.poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.currentTime)).toBeGreaterThanOrEqual(passages[4].startMs / 1000);
+  await expect(transcript.locator('[aria-current="true"]')).toContainText("你可以随时打断我");
+  const dock = page.locator(".player-dock");
+  expect(await dock.evaluate((element) => Math.abs(element.getBoundingClientRect().bottom - innerHeight))).toBeLessThan(2);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "暂停", exact: true }).click();
+  const mobileLine = transcript.locator(".transcript-line").nth(2);
+  await mobileLine.locator("span").last().click();
+  await expect(mobileLine).toHaveClass(/is-selected/);
+  const mobileJump = mobileLine.getByRole("button", { name: /从这句播放/ });
+  await expect(mobileJump).toHaveCSS("opacity", "1");
+  await mobileJump.click();
+  await expect.poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.paused)).toBe(false);
+  await expect.poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.currentTime)).toBeGreaterThanOrEqual(passages[2].startMs / 1000);
+  expect(await dock.evaluate((element) => Math.abs(element.getBoundingClientRect().bottom - innerHeight))).toBeLessThan(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
 test("real demo playback, interruption, sentence rewind and responsive layout", async ({
   page,
 }) => {
@@ -49,7 +86,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /听到这里，.*刚好有个问题。/ }),
+    page.getByRole("heading", { name: /好问题，.*不必等到最后。/ }),
   ).toBeVisible();
   await page.getByRole("button", { name: /给思考留一点空间/ }).click();
   await expect(
@@ -138,7 +175,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   ).toBeLessThan(2);
   await page.getByRole("button", { name: "暂停", exact: true }).click();
   await expect(page.locator(".player-card")).not.toHaveClass(/compact/);
-  await expect(page.locator(".cover")).toBeVisible();
+  await expect(page.locator(".cover")).toBeHidden();
   const questionInput = page.getByRole("textbox", { name: "输入问题" });
   await questionInput.fill("hello");
   await questionInput.press("Space");
@@ -152,7 +189,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
     await page
       .locator(".player-card")
       .evaluate((el) => el.getBoundingClientRect().height),
-  ).toBeGreaterThan(200);
+  ).toBeLessThan(105);
   await page.getByRole("button", { name: "播放", exact: true }).click();
   await expect(page.locator(".player-card")).toHaveClass(/compact/);
   await page.getByRole("button", { name: "暂停", exact: true }).click();
@@ -165,10 +202,27 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
         .evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight),
     )
     .toBeLessThan(2);
-  await page.screenshot({
-    path: "test-results/player-mobile.png",
-    fullPage: true,
-  });
+  await page.screenshot({ path: "test-results/player-mobile.png" });
+  // While listening on mobile the transcript and chat become switchable tabs
+  // inside a viewport-locked layout.
+  await page.getByRole("button", { name: "播放", exact: true }).click();
+  await expect(page.locator(".player-card")).toHaveClass(/compact/);
+  await expect(page.getByRole("tab", { name: "节目逐字稿" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await expect(page.getByRole("log", { name: "对话记录" })).toBeHidden();
+  await page.getByRole("tab", { name: "聊两句" }).click();
+  await expect(page.getByRole("log", { name: "对话记录" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "节目逐字稿" }),
+  ).toBeHidden();
+  const dockBottom = await page
+    .locator(".player-dock")
+    .evaluate((element) =>
+      Math.abs(element.getBoundingClientRect().bottom - innerHeight),
+    );
+  expect(dockBottom).toBeLessThan(2);
+  await page.screenshot({ path: "test-results/player-mobile-listening.png" });
+  await page.getByRole("button", { name: "暂停", exact: true }).click();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
@@ -286,7 +340,7 @@ test("local AudioWorklet is armed without cloud; first speech captures WAV and s
   ).toBe("ended");
 });
 
-for (const manual of [false, true]) {
+for (const manual of [false]) {
   test(`native WebRTC ${manual ? "manual" : "automatic"} voice answers, waits and resumes safely`, async ({
     page,
   }) => {
@@ -421,7 +475,6 @@ for (const manual of [false, true]) {
     });
     await page.goto("/");
     await page.getByRole("button", { name: /给思考留一点空间/ }).click();
-    if (manual) await page.getByLabel("插话方式").selectOption("manual");
     await page.getByRole("button", { name: "播放", exact: true }).click();
     if (!manual)
       await expect(

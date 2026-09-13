@@ -6,10 +6,11 @@ import {
   type Speaker,
 } from "./core.js";
 export interface AnalysisPort {
-  transcribe(path: string, offsetMs: number): Promise<Passage[]>;
+  transcribe(audio: Uint8Array, offsetMs: number): Promise<Passage[]>;
   enrich(
-    path: string,
+    audio: Uint8Array,
     passages: Passage[],
+    persistEvidence: (value: string) => Promise<void>,
   ): Promise<{
     summary: string;
     hostStyle: string;
