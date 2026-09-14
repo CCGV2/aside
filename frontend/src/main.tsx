@@ -1,5 +1,5 @@
 import { LibraryDrawer } from "./LibraryDrawer";
-import { audioCard } from "./library-item";
+import { audioCard, libraryFor } from "./library-item";
 import { Landing } from "./Landing";
 import { AccountControl } from "./AccountControl";
 import { Space } from "./Space";
@@ -10,7 +10,7 @@ import { createRoot } from "react-dom/client";
 import { usePlayerController } from "./usePlayerController";
 import "./style.css";
 function App() {
-  useLocale();
+  const locale = useLocale();
   const player = usePlayerController();
   const {
     episodes,
@@ -114,7 +114,7 @@ function App() {
             </a>
             <LibraryDrawer
               collection="public"
-              items={episodes.map(audioCard)}
+              items={libraryFor(episodes, locale).map(audioCard)}
               label={t("公共音频库")}
               onOpen={(id) =>
                 void playEpisode(id).catch((error) => setError(error.message))

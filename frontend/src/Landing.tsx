@@ -5,6 +5,7 @@ import { HeroSoundscape } from "./HeroSoundscape";
 import { ScrollStory } from "./ScrollStory";
 import { LanguageSelect } from "./LanguageSelect";
 import "./landing.css";
+import { libraryFor } from "./library-item";
 import { SampleRail } from "./SampleRail";
 
 export function Landing({
@@ -24,12 +25,15 @@ export function Landing({
 }) {
   const locale = useLocale();
   const rootRef = useRef<HTMLDivElement>(null);
-  const ready = episodes.filter((episode) => episode.status === "ready");
+  const ready = libraryFor(
+    episodes.filter((episode) => episode.status === "ready"),
+    locale,
+  );
   const demo =
     (locale === "en"
-      ? (ready.find((episode) => episode.id === "eff-oligarchy") ??
+      ? (ready.find((episode) => episode.id === "jfk-rice-moon") ??
         ready.find((episode) => episode.attribution?.language === "en"))
-      : undefined) ??
+      : ready.find((episode) => episode.attribution?.language === locale)) ??
     ready.find((episode) => episode.id === "demo-natural-resume") ??
     ready[0];
   useEffect(() => {

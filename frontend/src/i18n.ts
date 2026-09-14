@@ -92,6 +92,8 @@ export function useLocale() {
   return useSyncExternalStore(subscribe, getLocale, getLocale);
 }
 export const english: Record<string, string> = {
+  中文: "Chinese",
+  英文: "English",
   收起详情: "Close details",
   "打开音频库，选择一段开始收听":
     "Open your library and choose something to listen to.",
@@ -462,8 +464,11 @@ export const english: Record<string, string> = {
   检查音频与分块: "Checking audio and segments",
   检测停顿与分块位置: "Finding pauses and segments",
 };
+export function translate(text: string, target: Locale): string {
+  return target === "zh" ? text : (english[text] ?? text);
+}
 export function t(text: string): string {
-  return locale === "zh" ? text : (english[text] ?? text);
+  return translate(text, locale);
 }
 export function message(text: string): string {
   if (locale === "zh" || !text) return text;

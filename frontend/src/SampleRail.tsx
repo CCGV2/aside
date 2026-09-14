@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Episode } from "@aside/engine/core";
-import { t } from "./i18n";
+import { t, useLocale } from "./i18n";
+import { languageBadge } from "./library-item";
 import "./sample-rail.css";
 
 export function SampleRail({
@@ -12,6 +13,7 @@ export function SampleRail({
   onOpen: (id: string) => void;
   label: string;
 }) {
+  const locale = useLocale();
   const rail = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: true, end: false });
   useEffect(() => {
@@ -55,7 +57,11 @@ export function SampleRail({
               >
                 <span className="sample-panel-meta">
                   <span>{episode.attribution?.publisher || "Aside"}</span>
-                  <span>{duration}</span>
+                  <span>
+                    {[languageBadge(episode, locale), duration]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
                 </span>
                 <span className="sample-panel-wave" aria-hidden="true">
                   {Array.from({ length: 36 }, (_, i) => (

@@ -46,6 +46,8 @@ export interface Episode {
     licenseUrl: string;
     license: string;
     language: string;
+    /** Interface languages this recording is published on; absent means all. */
+    languageVisibility?: string[];
     excerptStartMs: number;
     excerptEndMs: number;
   };

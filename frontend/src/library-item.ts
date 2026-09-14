@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Episode } from "@aside/engine/core";
-import { message, t } from "./i18n";
+import { getLocale, message, t, translate, type Locale } from "./i18n";
 
 export interface AudioLibraryItem {
   id: string;
@@ -12,6 +12,63 @@ export interface AudioLibraryItem {
   progress?: number;
   actions?: ReactNode;
 }
+/**
+ * Attribution language is free-form data, so compare and label on the primary
+ * subtag: an episode tagged `zh-CN` is still Chinese for a `zh` interface.
+ */
+export function primaryLanguage(language: string | undefined) {
+  return language?.toLowerCase().split(/[-_]/)[0] || undefined;
+}
+
+/** Names the recording's language when it is not the interface language. */
+export function languageBadge(
+  episode: Episode,
+  locale: Locale,
+): string | undefined {
+  const language = episode.attribution?.language;
+  const code = primaryLanguage(language);
+  if (!code || code === locale) return undefined;
+  const name = code === "zh" ? "中文" : code === "en" ? "英文" : language!;
+  return translate(name, locale);
+}
+
+/**
+ * Puts recordings in the reader's own language first and leaves the rest in the
+ * order they arrived. The public library holds more than one language, so the
+ * interface language decides only the order, never what is available.
+ */
+export function byLocale(episodes: Episode[], locale: Locale): Episode[] {
+  const rank = (episode: Episode) =>
+    primaryLanguage(episode.attribution?.language) === locale ? 0 : 1;
+  return episodes
+    .map((episode, index) => ({ episode, index }))
+    .sort((a, b) => rank(a.episode) - rank(b.episode) || a.index - b.index)
+    .map((entry) => entry.episode);
+}
+
+/**
+ * `languageVisibility` lists the interface languages a public recording is
+ * published on. Entries are free-form, so `zh-cn` counts as `zh`. A recording
+ * without the field stays visible everywhere: the filter exists for the
+ * curated library, and a listener's own uploads must never disappear from
+ * their own player.
+ */
+export function visibleForLocale(episode: Episode, locale: Locale): boolean {
+  // Library data is written by hand as well as by the preparation script, so a
+  // stray string where a list belongs must not take the page down.
+  const visibility: unknown = episode.attribution?.languageVisibility;
+  if (!Array.isArray(visibility) || !visibility.length) return true;
+  return visibility.some((code) => primaryLanguage(String(code)) === locale);
+}
+
+/** What a reader sees: their own language's recordings first, nothing hidden. */
+export function libraryFor(episodes: Episode[], locale: Locale): Episode[] {
+  return byLocale(
+    episodes.filter((episode) => visibleForLocale(episode, locale)),
+    locale,
+  );
+}
+
 export function audioCard(episode: Episode): AudioLibraryItem {
   const seconds = Math.floor(episode.durationMs / 1000);
   return {
@@ -20,6 +77,7 @@ export function audioCard(episode: Episode): AudioLibraryItem {
     duration: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`,
     meta: [
       episode.attribution?.publisher,
+      languageBadge(episode, getLocale()),
       `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`,
       episode.status === "ready"
         ? t("可对话")

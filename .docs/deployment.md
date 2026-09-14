@@ -77,7 +77,6 @@ npm run db:cloudflare:production
 
 4 项相关浏览器测试和生产构建通过。线上逐一验证 ready 状态、署名元数据、逐字稿、音频哈希相同及 Range 206；证据在 `.wrangler/public-samples/production-verification.json`。英文界面试听按钮优先打开英文内容。本次用项目配置的 Whisper 和音频分析模型准备公开样本；未进行线上付费问答。
 
-
 ## 扩充英文试听库
 
 2026-09-12：新增 EFF 两集、NASA 两集、FOSS and Crafts 的 Blender 以及 Hacker Public Radio 的 Large Language Models，共六段 1:56–3:43 的英文节选。公开库现有 10 条（9 英文 + 1 中文演示）。每条的原始区间与授权证据见 [public-samples.md](public-samples.md)。
@@ -139,3 +138,29 @@ npm run db:cloudflare:production
 2026-09-14：`frontend/index.html` 补齐 description、canonical、robots、Open Graph/Twitter 卡片、Json-LD（`WebSite` + `WebApplication`）与 `noscript` 兜底；`frontend/src/i18n.ts` 按语言同步 title、description 和 OG 标签，`/space` 注入 `noindex, nofollow` 并移除 landing canonical。新增 `robots.txt`、`sitemap.xml`、`llms.txt` 和 1200×630 `og-image.png`（由 `scripts/prepare-og-image.mjs` 生成，重复执行哈希不变）。`llms.txt` 里的时长、大小和每日额度与 `engine/src/core.ts`、`cloudflare/src/uploads.ts` 对齐。
 
 `npm run check`、69 项项目测试和 2 项语言浏览器用例通过，生产构建产物包含四个静态文件。生产 Worker `89f194eb-bed9-46c3-bb39-3bfbe60f8b46` 已接收 100% 流量（`--containers-rollout=none`，保留现有 Container）。正式域名 `/`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 HTTP 200，MIME 依次为 `text/html`、`text/plain`、`application/xml`、`text/plain`、`image/png`；`/api/health` 200 且 `uploadsEnabled=true`。浏览器实测中英文 title/robots/canonical 以及 `/space` 的 noindex 均生效。`/space` 的 noindex 仍由客户端注入，不执行 JS 的爬虫看不到，后续可改由 Worker 返回 `X-Robots-Tag`。
+
+## 公开音频库换成两段历史录音
+
+2026-09-14：公开音频库原有 9 条英文播客节选（VOA 三条、EFF 两条、NASA 两条、FOSS and Crafts、Hacker Public Radio）全部下架，改为两段美国政府录音：JFK 1962-09-12 莱斯大学登月演说节选 3:48（`jfk-rice-moon`，源 archive.org `jfks19620912`）与里根 1987-06-12 勃兰登堡门演说节选 2:13（`reagan-brandenburg-gate`，源 NARA catalog 7087579，WHCA 带号 PP7163C）。两者都是联邦机构录音，按 17 U.S.C. §105 属公有领域；来源、区间、源与节选 SHA-256 见 [public-samples.md](public-samples.md)。
+
+`content/public-samples.json` 重写为这两条 spec，`scripts/prepare-public-samples.ts` 的 host 白名单精简为 `archive.org` 与 `catalog.archives.gov`。节选窗口先转录定位、再按整句边界选定（JFK 08:14.120–12:02.180，里根 30:24.820–32:38.000）；两条的音频模型复核均为 `musicAudible: false` 且首尾无硬切。里根源长 46:30，单次转录请求会超时，spec 里把转录窗口收窄到 28:20–33:20，使仓库脚本可独立复现。
+
+下架与发布在 `CLOUDFLARE_ACCOUNT_ID=221784d24eb2a95d148bc96b6f06d6be` 下执行（OAuth 登录下有两个账号）：先删除 9 个 R2 对象，再执行 `content/retire-public-samples.sql`（changes 55 / rows_written 54），随后上传两条新节选并导入各自的 seed SQL。9 条旧节目的 seed SQL 与节选 mp3 仍保留在本机 `.wrangler/public-samples/`（该目录被 gitignore），本机可原样回滚；该目录若丢失，仍可从 git 历史里的旧 `content/public-samples.json` 重新准备，代价是重跑一次付费转录。
+
+线上核对：`/api/episodes` 返回 2 条且均 `ready`；两条时长 228060ms / 133180ms 与本地一致；完整下载后的 SHA-256 与本地节选一致（`dafd281c…`、`34b405fc…`）；`Range: bytes=0-1023` 返回 206；9 个旧 id 的 `/api/episodes/<id>/audio` 均返回 404。D1 侧复查这 9 个 id 在 `episodes`、`checkpoints`、`voice_usage`、`uploads` 中均已无残余行，`artifacts` 只剩两条新节目与既有的 `demo-natural-resume` 三条 key。浏览器实测 `/` 只列出这两条，中文「体验示例」打开 `jfk-rice-moon`，署名链接指向 archive.org 条目、转载许可链接指向 `usa.gov/government-works`，文字稿渲染 28 行且包含完整的 "We choose to go to the moon" 段。本地 `npm run check` 与 69 项项目测试通过。
+
+前端已随本次发布部署：`npm run build` 通过后执行 `wrangler deploy --config wrangler.production.jsonc --containers-rollout=none`（保留现有 Container），Worker 版本 `bd8dd6f0-8b74-4c5c-ae50-6824c2a5fc42`，上传 3 个新静态资源（`/index.html`、`/assets/index-qi4jWgdy.js` 及其 sourcemap）。`wrangler.production.jsonc` 补上 `account_id`，避免 OAuth 登录带多个账号时落到错误的账号。线上 `/` 的 HTML 已引用新 bundle，bundle 内的 CTA 逻辑为 `locale==="en"` 时优先 `jfk-rice-moon`；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200 且 MIME 不变。
+
+未完成或未验证：`tests/browser/public-samples.spec.ts` 已改为覆盖这两条并断言旧内容不再出现，但本地 `.data` 没有公开样本数据，本轮未执行；浏览器实测只到「落地页列出这两条」，切到英文界面复核 CTA 的那次点击触发了自动审批拦截，未完成。两条 1960 年代/1980 年代现场录音的 Whisper 逐字稿有个别错词（里根那条把 "comity" 听成 "comedy"）。
+
+## 公开音频库加入 Longines Chronoscope 访谈
+
+2026-09-14：公开音频库从 2 条增加到 6 条，新增四集 _Longines Chronoscope_（1951–1955 年 CBS 系电视访谈节目）：`chronoscope-kennedy`（众议员约翰·肯尼迪谈 1952 年参议员选战，3:35）、`chronoscope-warren`（加州州长厄尔·沃伦谈党内初选，3:23）、`chronoscope-moses`（罗伯特·摩西谈城市更新，3:06）、`chronoscope-byrd`（理查德·伯德谈极地，2:53）。
+
+授权依据与之前两条不同：Longines-Wittnauer 表厂把赞助并持有的版权**于 1969-12-19 全部转让给美国政府**，母带捐给国家档案馆；NARA 在每个条目的 `useRestriction` 里记着这句话、状态 `Unrestricted`，并由 NARA 自己在 archive.org 的 `usgovfilms` 集合以 CC0 发布（共 231 集）。来源、区间、源与节选 SHA-256 见 [public-samples.md](public-samples.md)。
+
+节选用 `_512kb.mp4` 衍生文件（59–67MB），未用 650–715MB 的 `.mpeg` 原始档；现有管线不需改动，ffmpeg 写 `.mp3` 会自动选音频流。四集片头/片尾都带 Longines 广告，节选窗口都落在这两段之间（正文分别在 10:50、11:31、12:01、11:53 结束）。伯德那条的开口被音频模型评为「略突兀」，因为切在主持人提问的轮次边界而非段落开头，已在文档中记录。
+
+线上核对：`/api/episodes` 返回 6 条且均 `ready`；四条新节选完整下载后的 SHA-256 与本地一致；`Range: bytes=0-1023` 返回 206；逐字稿与续播锚点分别为 71/12、69/10、68/11、64/9 条，末段文字确认不含广告。9 个已下架旧内容的 id 仍全部 404。`npm run check` 与 69 项项目测试通过；`tests/browser/public-samples.spec.ts` 的条目数断言已从 2 更新为 6，但本地 `.data` 无公开样本数据，仍未执行。
+
+1940–80 年代转录质量明显低于此前的播客素材：肯尼迪那条把 "Senator Lodge" 听成 "senator large"/"senator lange"，四集都把 "Longines" 听成 "launching"/"long gene"。逐字稿按音频生成、不做人工修正，重跑会复现同样错误，已记入文档。
