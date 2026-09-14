@@ -93,7 +93,7 @@ export function ScrollStory() {
       aria-label={t("收听与对话示意")}
     >
       <div className="story-pin">
-        <HeroSoundscape variant="story" />
+        <HeroSoundscape variant="story" paused={step === 1 || step === 2} />
         <div className="story-heading">
           <span className="story-eyebrow">ASIDE / {t("交互示意")}</span>
           <h2 key={step}>{headlines[step]}</h2>

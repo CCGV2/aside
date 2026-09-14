@@ -1,64 +1,120 @@
 import { useEffect, useRef } from "react";
 
-// Deterministic curves keep the background stable between renders.
-const curves = Array.from({ length: 16 }, (_, line) =>
-  Array.from({ length: 101 }, (_, point) => {
-    const x = point * 16;
-    const envelope =
-      Math.exp(-(((x - 280) / 240) ** 2)) +
-      Math.exp(-(((x - 1320) / 260) ** 2));
-    const y =
-      230 +
-      Math.sin(x / 110 + line * 0.12) * (38 + line * 5) * envelope +
-      (line - 7.5) * 5;
-    return `${point ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" "),
+const lines = 16;
+const points = 101;
+const clamp = (value: number) => Math.max(0, Math.min(1, value));
+
+// The two swells stay in place; only the ripple inside them travels.
+const envelope = Array.from({ length: points }, (_, point) => {
+  const x = point * 16;
+  return (
+    Math.exp(-(((x - 280) / 240) ** 2)) + Math.exp(-(((x - 1320) / 260) ** 2))
+  );
+});
+const commands = Array.from(
+  { length: points },
+  (_, point) => `${point ? " L" : "M"}${point * 16},`,
 );
+
+// Deterministic at time 0, so the first render and reduced motion match.
+function curve(line: number, time: number) {
+  const swell = 1 + Math.sin(time * 0.3) * Math.cos(line * 0.5) * 0.07;
+  const amplitude = (38 + line * 5) * swell;
+  const phase = line * 0.12 - time * 0.24;
+  const baseline = 230 + (line - 7.5) * 5;
+  let d = "";
+  for (let point = 0; point < points; point++) {
+    const y =
+      baseline +
+      Math.sin((point * 16) / 110 + phase) * amplitude * envelope[point];
+    d += commands[point] + Math.round(y * 10) / 10;
+  }
+  return d;
+}
+
+const still = Array.from({ length: lines }, (_, line) => curve(line, 0));
 
 export function HeroSoundscape({
   variant = "hero",
+  paused = false,
 }: {
   variant?: "hero" | "story" | "library";
+  paused?: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const held = useRef(paused);
+  const wake = useRef(() => {});
   useEffect(() => {
     const element = root.current!;
-    const hero = element.parentElement!;
+    const section = element.parentElement!;
+    const paths = element.querySelectorAll("path");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let visible = false;
     let frame = 0;
-    const update = () => {
+    let last = 0;
+    let clock = 0;
+    let speed = 0;
+    // Drift only while on screen, and ease to a stop rather than freezing.
+    const flow = (now: number) => {
       frame = 0;
-      const bounds = hero.getBoundingClientRect();
-      const progress =
-        reduced.matches || variant !== "hero"
-          ? 0
-          : Math.max(0, Math.min(1, -bounds.top / bounds.height));
-      element.style.setProperty("--sound-scale", String(1 - progress * 0.8));
-      element.style.setProperty("--sound-shift", `${progress * 140}px`);
-      element.style.setProperty("--sound-opacity", String(1 - progress));
-      element.dataset.active = String(
-        bounds.bottom > 0 &&
-          bounds.top < window.innerHeight &&
-          !document.hidden &&
-          !reduced.matches,
-      );
+      const running =
+        visible && !document.hidden && !reduced.matches && !held.current;
+      const delta = last ? Math.min(0.1, (now - last) / 1000) : 0;
+      last = now;
+      speed += ((running ? 1 : 0) - speed) * Math.min(1, delta * 2.5);
+      clock += delta * speed;
+      paths.forEach((path, line) => path.setAttribute("d", curve(line, clock)));
+      if (running || speed > 0.01) frame = requestAnimationFrame(flow);
+      else last = 0;
     };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(update);
+    wake.current = () => {
+      if (!frame) frame = requestAnimationFrame(flow);
     };
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    document.addEventListener("visibilitychange", schedule);
-    reduced.addEventListener("change", schedule);
-    update();
+    let exitFrame = 0;
+    // The hero publishes its exit progress; CSS decides what moves with it.
+    const exit = () => {
+      exitFrame = 0;
+      const bounds = section.getBoundingClientRect();
+      const progress = reduced.matches
+        ? 0
+        : clamp(-bounds.top / bounds.height);
+      section.style.setProperty("--hero-progress", String(progress));
+      // Hold the shape while the headline is read, then fold it away.
+      section.style.setProperty("--hero-exit", String(progress * progress));
+    };
+    const scheduleExit = () => {
+      if (!exitFrame) exitFrame = requestAnimationFrame(exit);
+    };
+    const changed = () => {
+      wake.current();
+      if (variant === "hero") scheduleExit();
+    };
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      wake.current();
+    });
+    observer.observe(section);
+    document.addEventListener("visibilitychange", changed);
+    reduced.addEventListener("change", changed);
+    if (variant === "hero") {
+      window.addEventListener("scroll", scheduleExit, { passive: true });
+      window.addEventListener("resize", scheduleExit);
+      exit();
+    }
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-      document.removeEventListener("visibilitychange", schedule);
-      reduced.removeEventListener("change", schedule);
+      cancelAnimationFrame(exitFrame);
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", changed);
+      reduced.removeEventListener("change", changed);
+      window.removeEventListener("scroll", scheduleExit);
+      window.removeEventListener("resize", scheduleExit);
     };
   }, [variant]);
+  useEffect(() => {
+    held.current = paused;
+    wake.current();
+  }, [paused]);
   return (
     <div
       ref={root}
@@ -67,7 +123,7 @@ export function HeroSoundscape({
     >
       <svg viewBox="0 0 1600 460" preserveAspectRatio="none" fill="none">
         <g>
-          {curves.map((d, index) => (
+          {still.map((d, index) => (
             <path key={index} d={d} />
           ))}
         </g>

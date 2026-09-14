@@ -4,13 +4,18 @@
   flex-direction: column;
   justify-content: center;
   gap: 36px;
-  min-height: min(660px, calc(78svh - 104px));
+  min-height: min(560px, calc(64svh - 104px));
   padding: 60px 0 38px;
   text-align: center;
   box-sizing: border-box;
 }
 .hero-copy {
   width: 100%;
+}
+/* The copy leaves slightly ahead of the page while the waves fall behind. */
+.landing .hero-copy {
+  translate: 0 calc(var(--hero-progress, 0) * -36px);
+  opacity: calc(1 - var(--hero-exit, 0) * 0.7);
 }
 .landing .hero-eyebrow {
   justify-content: center;
@@ -70,12 +75,23 @@
   top: 0;
   height: 100svh;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 24px 0;
+  display: grid;
+  /* Optical centre: less room above the scene than below it. */
+  grid-template-rows: 1fr repeat(4, auto) 2fr;
+  justify-items: center;
+  row-gap: 24px;
+}
+.story-heading {
+  grid-row: 2;
+}
+.story-stage {
+  grid-row: 3;
+}
+.story-controls {
+  grid-row: 4;
+}
+.story-skip {
+  grid-row: 5;
 }
 .story-heading {
   text-align: center;
@@ -383,7 +399,7 @@
 }
 @media (max-width: 700px) {
   .landing .hero {
-    min-height: calc(82svh - 76px);
+    min-height: calc(60svh - 80px);
     padding: 35px 0 24px;
     gap: 24px;
   }
@@ -404,8 +420,7 @@
     height: 235svh;
   }
   .story-pin {
-    gap: 14px;
-    padding: 16px 0;
+    row-gap: 14px;
   }
   .landing .story-heading h2 {
     font-size: 26px;
@@ -503,6 +518,10 @@
   .story-stage {
     transform: none;
   }
+  .landing .hero-copy {
+    translate: none;
+    opacity: 1;
+  }
   .story-wave i,
   .landing .story-heading h2 {
     animation: none;
@@ -531,6 +550,17 @@
   background:
     radial-gradient(ellipse at 35% 52%, #8eabc02b, transparent 63%),
     radial-gradient(ellipse at 70% 60%, #c8a48e22, transparent 58%);
+  mask-image: var(--wash-fade);
+}
+/* Washes are wider than their gradients fade; soften the sides so no edge shows. */
+.landing {
+  --wash-fade: linear-gradient(
+    90deg,
+    transparent,
+    #000 22%,
+    #000 78%,
+    transparent
+  );
 }
 .story-pin {
   isolation: isolate;
@@ -542,6 +572,7 @@
   z-index: -1;
   pointer-events: none;
   inset: 0 calc((100% - 100vw) / 2 + 12px);
+  mask-image: var(--wash-fade);
 }
 .story-pin::before {
   background: radial-gradient(ellipse at 40% 48%, #8eabc025, transparent 68%);
@@ -568,9 +599,10 @@
   top: 12%;
   width: min(calc(100vw - 24px), 1800px);
   height: 76%;
-  transform: translateX(-50%) translateY(var(--sound-shift, 0px))
-    scaleY(var(--sound-scale, 1));
-  opacity: var(--sound-opacity, 1);
+  transform: translateX(-50%)
+    translateY(calc(var(--hero-progress, 0) * 140px))
+    scaleY(calc(1 - var(--hero-exit, 0) * 0.8));
+  opacity: calc(1 - var(--hero-exit, 0));
   mask-image: linear-gradient(
     90deg,
     transparent,
@@ -588,14 +620,6 @@
   height: 100%;
   overflow: visible;
 }
-.soundscape g {
-  transform-origin: center;
-  animation: soundscape-breathe 11s ease-in-out infinite alternate;
-  animation-play-state: paused;
-}
-.soundscape[data-active="true"] g {
-  animation-play-state: running;
-}
 .soundscape path {
   stroke: #829bb5;
   stroke-width: 1;
@@ -608,14 +632,6 @@
 }
 .soundscape path:nth-child(4n) {
   opacity: 0.12;
-}
-@keyframes soundscape-breathe {
-  from {
-    transform: translateY(-5px) scaleY(0.94);
-  }
-  to {
-    transform: translateY(8px) scaleY(1.06);
-  }
 }
 @media (max-width: 700px) {
   .soundscape {
@@ -630,9 +646,6 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .soundscape g {
-    animation: none;
-  }
   .soundscape {
     transform: translateX(-50%);
     opacity: 1;
@@ -643,10 +656,6 @@
   top: 14%;
   height: 66%;
   opacity: 0.35;
-}
-.scroll-story[data-step="1"] .story-soundscape g,
-.scroll-story[data-step="2"] .story-soundscape g {
-  animation-play-state: paused;
 }
 .scroll-story[data-step="1"] .story-soundscape,
 .scroll-story[data-step="2"] .story-soundscape {
