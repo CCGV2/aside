@@ -71,3 +71,17 @@
   .space-nav-actions { width: 100%; justify-content: flex-end; gap: 14px; }
   .space-stage-empty { margin-top: 90px; }
 }
+/* The same file cabinet remains scrollable beside the player. */
+@media (max-width: 700px) {
+  .space-sidebar-list, .space-page.shell .space-sidebar-list {
+    display: block; max-height: 340px; overflow: auto;
+  }
+}
+@media (max-width: 700px) {
+  .space-page .space-sidebar.sidebar {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+  .space-page .space-sidebar .brand { align-self: flex-start; }
+}

@@ -3,6 +3,8 @@ test.use({ locale: "en-US" });
 test("English samples show attribution, timed transcripts, and playable audio", async ({
   page,
 }) => {
+  // Nine real audio samples plus each cabinet opening/return transition.
+  test.setTimeout(60_000);
   await page.addInitScript(() => {
     navigator.mediaDevices.getUserMedia = async () => {
       throw new DOMException("denied", "NotAllowedError");
@@ -35,13 +37,16 @@ test("English samples show attribution, timed transcripts, and playable audio", 
   ]) {
     // The CTA already opened the first sample. Reloading that same title would
     // let the assertion match the old heading before the reload completes.
-    if (title !== "Smashing the Tech Oligarchy")
-      await page.getByRole("button", { name: new RegExp(title) }).click();
+    if (title !== "Smashing the Tech Oligarchy") {
+      await page.getByRole("complementary", { name: "Public library" }).getByRole("button", { name: new RegExp(title) }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
     await expect(
-      page.getByRole("heading", { name: title, exact: true }),
+      page.locator(".player-main").getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();
     expect(await page.locator(".transcript-line").count()).toBeGreaterThan(15);
-    await page.getByRole("button", { name: "Play", exact: true }).click();
+    if (title === "Smashing the Tech Oligarchy") await page.getByRole("button", { name: "Play", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
     await expect
       .poll(() =>
         page.locator("audio").evaluate((a: HTMLAudioElement) => a.currentTime),

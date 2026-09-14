@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("entry requests microphone access, releases the device, and shows no settings", async ({
+test("entry stays listen-only until the user enables the microphone", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -28,8 +28,10 @@ test("entry requests microphone access, releases the device, and shows no settin
   );
   await page.goto("/");
   expect(await page.evaluate(() => (window as any).permissionRequests)).toBe(0);
-  await page.getByRole("button", { name: "试听" }).click();
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await page.getByRole("button", { name: "体验示例" }).click();
+  await expect(page.getByRole("region", { name: "文字稿" })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).permissionRequests)).toBe(0);
+  await page.getByRole("button", { name: "开启麦克风", exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => (window as any).permissionRequests))
     .toBe(1);

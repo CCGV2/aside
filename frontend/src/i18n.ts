@@ -59,18 +59,90 @@ export function useLocale() {
   return useSyncExternalStore(subscribe, getLocale, getLocale);
 }
 export const english: Record<string, string> = {
+  收起详情: "Close details",
+  "打开音频库，选择一段开始收听":
+    "Open your library and choose something to listen to.",
+  音频库: "Library",
+  "对话发生过，": "Recorded then.",
+  "你依然可以加入。": "Your turn now.",
+  "让聆听，多一种可能。": "A new possibility for listening.",
+  "向下滚动，看看对话如何发生": "Scroll to see the conversation unfold",
+  "一起聊下去": "Talk it through",
+  "好内容，值得听进去。": "Something worth listening to.",
+  "有想法，就加入。": "An idea? You're in.",
+  "它听懂的不止这一句。": "More than just your last words.",
+  "聊完，刚好接着听。": "Pick up the thread.",
+  "访谈、播客、分享。每一段声音，都可以是对话的开始。": "Interviews. Podcasts. Talks. Every voice can start a conversation.",
+  "一个问题，一点不同意见。让单向的收听，变成双向的交流。": "A question. A different take. Turn listening into a two-way conversation.",
+  "Aside 结合前面的内容回应，让你的好奇继续往前走。": "Aside responds with the context in mind. Follow your curiosity further.",
+  "回到刚才完整的一句话，思路和进度都接得上。": "Resume at a complete sentence. Keep your place, and your train of thought.",
+  "有时候，新的想法不在屏幕里。": "Sometimes, new ideas live beyond the screen.",
+  "当我们暂时离开屏幕，": "When we step away from the screen,",
+  "注意力会转向周围的声音、光线和风。": "our attention shifts to the sounds, light and breeze around us.",
+  "给思考留一点空间。": "A little room for thought.",
+  "这里，留给你的想法。": "A little room for your perspective.",
+  "不矛盾。注意力离开屏幕，不一定是更专注。走神，也可能带来新的联想。": "Not necessarily. Looking away from a screen doesn't have to mean more focus. A wandering mind can make new connections, too.",
+  "选一段，亲自试试": "Pick something. Join in.",
+  "听听，聊聊。": "Listen. Join in.",
+  "上一组音频": "Previous audio samples",
+  "下一组音频": "Next audio samples",
+  调整音频库宽度: "Resize audio library",
+  关闭音频库: "Close library",
+  公共音频库: "Public library",
+  听这段: "Listen to this",
+  分析进度: "Analysis progress",
+  开启麦克风: "Enable microphone",
+  "从 {time} 开始聊": "Started talking at {time}",
+  回到音频: "Returning to the audio",
+  只听音频: "Listen only",
+  "登录后保存你的音频和收听进度。":
+    "Sign in to save your audio and listening progress.",
+  "安心听，也可以打字聊聊你的想法。":
+    "Settle in and listen, or type what’s on your mind.",
+  "或与你有关的经历，都可以从这里聊起。":
+    "or an experience of your own. Start here.",
+  "一个问题、一点不同意见，": "A question, a different perspective,",
+  "听到这里，你想说什么？": "What’s on your mind as you listen?",
+  发送消息: "Send message",
+  输入消息: "Your message",
+  文字稿: "Transcript",
+  "听到这里，你也有话想说。": "Recorded then. Interactive now.",
+  "暂时没有可收听的示例。": "No samples are available right now.",
+  示例音频: "Sample audio",
+  "挑一段感兴趣的，听到有想法时，就开口聊聊。":
+    "Pick something that interests you. When a thought comes to mind, jump into the conversation.",
+  "刚才说的是注意力离开屏幕，不一定是更专注。走神也可能带来新的联想。你走神时，通常会想到什么？":
+    "The passage describes attention moving away from the screen, not necessarily becoming more focused. A wandering mind can make new connections too. Where does yours tend to go?",
+  "但我散步时反而容易走神，这和刚才说的矛盾吗？":
+    "But my mind wanders when I walk. Does that contradict what was just said?",
+  一段关于散步与灵感的讨论: "A discussion about walking and inspiration",
+  接着听: "Keep listening",
+  说说你的想法: "Share a thought",
+  听一段: "Listen",
+  收听与对话示意: "Preview of listening and conversation",
+  "无需注册，先听一段": "No sign-up. Start with a listen.",
+  体验示例: "Try a sample",
+  "听访谈、课程或讨论时，随时开口。Aside 会结合刚才的内容，和你聊问题、想法与不同意见。聊完，从刚才那句话继续听。":
+    "Speak up during an interview, lecture, or discussion. Aside draws on what you just heard to explore your questions, ideas, and different perspectives. Then pick up from the sentence you left.",
+  "你也有话想说。": "Interactive now.",
+  "让过去的声音，成为此刻的对话": "Past voices. Present conversations.",
   探索: "Explore",
   我的空间: "My space",
-  从左侧选择音频开始收听: "Choose an audio file from the left to start listening.",
+  从左侧选择音频开始收听:
+    "Choose an audio file from the left to start listening.",
   "正在加载…": "Loading…",
-  "登录后，把想听的音频放在这里。": "Sign in to keep the audio you want to hear here.",
-  "请从右上角登录，随时回来继续收听。": "Sign in at the top right and pick up anytime.",
+  "登录后，把想听的音频放在这里。":
+    "Sign in to keep the audio you want to hear here.",
+  "请从右上角登录，随时回来继续收听。":
+    "Sign in at the top right and pick up anytime.",
   你的私人音频库: "YOUR PRIVATE LIBRARY",
-  "把想听的音频放在这里，听到疑问时随时聊两句。": "Bring your audio here. Ask whenever curiosity strikes.",
+  "把想听的音频放在这里，听到疑问时随时聊两句。":
+    "Bring your audio here. Ask whenever curiosity strikes.",
   上传音频: "Upload audio",
   篇今日已用: "used today",
   "拖入音频，或选择文件": "Drop audio here, or choose a file",
-  "单个音频最长 5 小时 · 文件最大 1 GiB · 每天最多 5 篇": "Up to 5 hours and 1 GiB per file · 5 uploads a day",
+  "单个音频最长 5 小时 · 文件最大 1 GiB · 每天最多 5 篇":
+    "Up to 5 hours and 1 GiB per file · 5 uploads a day",
   选择音频: "Choose audio",
   "音频文件需小于 1 GiB": "The audio file must be under 1 GiB.",
   "文件不能超过 1 GiB": "The file cannot exceed 1 GiB.",
@@ -82,37 +154,48 @@ export const english: Record<string, string> = {
   上传已取消: "Upload cancelled",
   "上传完成，正在启动自动分析…": "Upload complete. Starting analysis…",
   我的音频: "My audio",
-  "上传中断，可取消后重新上传": "Upload interrupted. Cancel and choose the file again.",
+  "上传中断，可取消后重新上传":
+    "Upload interrupted. Cancel and choose the file again.",
   正在检查音频: "Checking audio",
   可对话: "Ready to talk",
   重试分析: "Retry analysis",
   删除: "Delete",
   取消: "Cancel",
   这里还没有音频: "No audio here yet",
-  "上传后会自动分析，无需再点开始。": "Analysis starts automatically after upload.",
+  "上传后会自动分析，无需再点开始。":
+    "Analysis starts automatically after upload.",
   加载更多: "Load more",
   "确定删除这篇音频及其分析结果吗？": "Delete this audio and its analysis?",
-  "请先登录再上传音频": "Sign in before uploading audio.",
-  "音频仍在检查中或未通过检查": "Audio is still being checked or did not pass validation.",
-  "文件不包含可读取的音轨": "No readable audio track was found.",
+  请先登录再上传音频: "Sign in before uploading audio.",
+  音频仍在检查中或未通过检查:
+    "Audio is still being checked or did not pass validation.",
+  文件不包含可读取的音轨: "No readable audio track was found.",
   "文件超过 1 GiB 上限": "File exceeds the 1 GiB limit.",
-  "个人空间已达到 20 GiB 存储上限，请删除不需要的音频": "Your 20 GiB storage is full. Delete audio you no longer need.",
-  "今天的全站上传或存储额度已满，请稍后再试": "The shared upload or storage allowance is full. Please try again later.",
-  "今天的上传尝试次数已用完，请明天再试": "Today's upload attempt allowance is exhausted. Please try tomorrow.",
-  "上传暂未开放，已保存的音频仍可收听。": "Uploads are not open yet. You can still listen to saved audio.",
+  "个人空间已达到 20 GiB 存储上限，请删除不需要的音频":
+    "Your 20 GiB storage is full. Delete audio you no longer need.",
+  "今天的全站上传或存储额度已满，请稍后再试":
+    "The shared upload or storage allowance is full. Please try again later.",
+  "今天的上传尝试次数已用完，请明天再试":
+    "Today's upload attempt allowance is exhausted. Please try tomorrow.",
+  "上传暂未开放，已保存的音频仍可收听。":
+    "Uploads are not open yet. You can still listen to saved audio.",
   验证并上传: "Verify to upload",
-  "完成验证后即可上传。每个账号每天最多 5 篇，上传完成后自动分析。": "Verify to upload. Each account can upload 5 files a day; analysis starts automatically.",
+  "完成验证后即可上传。每个账号每天最多 5 篇，上传完成后自动分析。":
+    "Verify to upload. Each account can upload 5 files a day; analysis starts automatically.",
   "登录 / 注册": "Sign in",
   编辑个人资料: "Edit profile",
   关闭: "Close",
   从这里继续听: "Keep listening from here",
-  "登录后保存你的节目和收听进度。": "Sign in to keep your episodes and listening progress.",
+  "登录后保存你的节目和收听进度。":
+    "Sign in to keep your episodes and listening progress.",
   "使用 Google 登录": "Continue with Google",
   邮件验证码: "Email code",
   更换邮箱或重发: "Change email or resend",
   "请稍候…": "Please wait…",
   验证并登录: "Verify and sign in",
   发送验证码: "Send a code",
+  "登录服务暂时不可用，请稍后刷新重试。":
+    "Sign-in is temporarily unavailable. Please refresh and try again later.",
   登录服务尚未配置: "Sign-in is not configured yet.",
   个人资料: "Profile",
   更换头像: "Change avatar",
@@ -123,7 +206,8 @@ export const english: Record<string, string> = {
   退出登录: "Sign out",
   "请求失败，请重试": "Something went wrong. Try again.",
   "头像不能超过 2 MB": "Avatar must be under 2 MB.",
-  "请先用邮件验证码验证邮箱，再从个人资料关联 Google。": "Verify this address by email, then link Google from your profile.",
+  "请先用邮件验证码验证邮箱，再从个人资料关联 Google。":
+    "Verify this address by email, then link Google from your profile.",
   "关联 Google 账号": "Link Google account",
   节选: "Excerpt",
   转载许可: "Reuse terms",
@@ -179,7 +263,7 @@ export const english: Record<string, string> = {
   "耳机听，更自在。": "Best enjoyed with headphones.",
   "你的播客，留一点对话的空间":
     "A little room for conversation in your podcast",
-  "听到这里，": "You’re listening.",
+  "听到这里，": "Recorded then.",
   "刚好有个问题。": "A question comes to mind.",
   "带来一期播客。随时开口，聊清楚，":
     "Bring a podcast. Ask whenever you’re curious,",
@@ -235,7 +319,7 @@ export const english: Record<string, string> = {
   "不懂的概念，突然的好奇。": "An unfamiliar idea. A sudden curiosity.",
   "都可以在这里聊。": "There’s room for it here.",
   "播放时自动监听，直接开口就能打断；暂停后停止监听。":
-    "Speak to interrupt while the podcast plays. Pausing turns listening off.",
+    "Speak to interrupt while the audio plays. Pausing turns listening off.",
   "按住下方按钮说话，松开后回答。":
     "Hold the button below to speak, then release for an answer.",
   "安心听节目，有问题也可以打字问。":

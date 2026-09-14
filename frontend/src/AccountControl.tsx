@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { t } from "./i18n";
 import "./account.css";
 
-interface User {
+export interface User {
   id: string;
   email: string;
   alias: string;
@@ -32,10 +33,13 @@ const json = (body: unknown): RequestInit => ({
 
 export function AccountControl({
   onAuthChanged,
+  onUserChanged,
 }: {
   onAuthChanged: () => Promise<void>;
+  onUserChanged?: (user: User | null) => void;
 }) {
   const [session, setSession] = useState<Session>();
+  const [sessionFailed, setSessionFailed] = useState(false);
   const [view, setView] = useState<"closed" | "login" | "profile">("closed");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -64,12 +68,26 @@ export function AccountControl({
           void onAuthChanged();
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setSessionFailed(true);
+      });
     return () => {
       active = false;
     };
   }, []);
   const user = session?.user;
+  useEffect(() => {
+    onUserChanged?.(
+      user
+        ? {
+            ...user,
+            avatarUrl: user.avatarUrl?.startsWith("/api/")
+              ? `${user.avatarUrl}${user.avatarUrl.includes("?") ? "&" : "?"}v=${avatarVersion}`
+              : user.avatarUrl,
+          }
+        : null,
+    );
+  }, [user, avatarVersion, onUserChanged]);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -154,7 +172,6 @@ export function AccountControl({
       await onAuthChanged();
     });
   }
-  if (!session) return null;
   return (
     <>
       <button
@@ -188,163 +205,176 @@ export function AccountControl({
           t("登录 / 注册")
         )}
       </button>
-      {view !== "closed" && (
-        <div
-          className="account-overlay"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setView("closed");
-          }}
-        >
-          <section
-            className="account-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="account-title"
+      {view !== "closed" &&
+        createPortal(
+          <div
+            className="account-overlay"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setView("closed");
+            }}
           >
-            <button
-              className="account-close"
-              aria-label={t("关闭")}
-              onClick={() => setView("closed")}
+            <section
+              className="account-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="account-title"
             >
-              ×
-            </button>
-            {view === "login" ? (
-              <>
-                <span className="account-eyebrow">ASIDE / ACCOUNT</span>
-                <h2 id="account-title">{t("从这里继续听")}</h2>
-                <p>{t("登录后保存你的节目和收听进度。")}</p>
-                {session.googleEnabled && (
-                  <a className="account-google" href="/api/auth/google">
-                    {t("使用 Google 登录")} ↗
-                  </a>
-                )}
-                {session.emailEnabled && (
-                  <form onSubmit={sent ? verify : send}>
-                    <label htmlFor="account-email">Email</label>
+              <button
+                className="account-close"
+                aria-label={t("关闭")}
+                onClick={() => setView("closed")}
+              >
+                ×
+              </button>
+              {view === "login" ? (
+                <>
+                  <span className="account-eyebrow">ASIDE / ACCOUNT</span>
+                  <h2 id="account-title">{t("从这里继续听")}</h2>
+                  <p>{t("登录后保存你的音频和收听进度。")}</p>
+                  {session?.googleEnabled && (
+                    <a className="account-google" href="/api/auth/google">
+                      {t("使用 Google 登录")} ↗
+                    </a>
+                  )}
+                  {session?.emailEnabled && (
+                    <form onSubmit={sent ? verify : send}>
+                      <label htmlFor="account-email">Email</label>
+                      <input
+                        id="account-email"
+                        type="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        required
+                        disabled={sent || busy}
+                      />
+                      {sent && (
+                        <>
+                          <label htmlFor="account-code">
+                            {t("邮件验证码")}
+                          </label>
+                          <input
+                            id="account-code"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]{8}"
+                            maxLength={8}
+                            value={code}
+                            onChange={(event) => setCode(event.target.value)}
+                            required
+                            disabled={busy}
+                          />
+                          <button
+                            type="button"
+                            className="account-text"
+                            onClick={() => {
+                              setSent(false);
+                              setCode("");
+                            }}
+                          >
+                            {t("更换邮箱或重发")}
+                          </button>
+                        </>
+                      )}
+                      <button className="account-primary" disabled={busy}>
+                        {busy
+                          ? t("请稍候…")
+                          : sent
+                            ? t("验证并登录")
+                            : t("发送验证码")}
+                      </button>
+                    </form>
+                  )}
+                  {!session && (
+                    <p role="status">
+                      {sessionFailed
+                        ? t("登录服务暂时不可用，请稍后刷新重试。")
+                        : t("请稍候…")}
+                    </p>
+                  )}
+                  {session &&
+                    !session.emailEnabled &&
+                    !session.googleEnabled && <p>{t("登录服务尚未配置")}</p>}
+                </>
+              ) : (
+                <>
+                  <span className="account-eyebrow">ASIDE / PROFILE</span>
+                  <h2 id="account-title">{t("个人资料")}</h2>
+                  <form onSubmit={save}>
+                    <label className="account-avatar-picker">
+                      <span className="account-avatar-large">
+                        {user?.avatarUrl ? (
+                          <img
+                            src={
+                              user.avatarUrl +
+                              (user.avatarUrl.startsWith("/api/")
+                                ? `?v=${avatarVersion}`
+                                : "")
+                            }
+                            alt=""
+                          />
+                        ) : (
+                          user?.alias.slice(0, 1).toUpperCase()
+                        )}
+                      </span>
+                      <span>
+                        {t("更换头像")}
+                        <small>PNG / JPEG / WebP · 2 MB</small>
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={(event) =>
+                          void avatar(event.target.files?.[0])
+                        }
+                        disabled={busy}
+                      />
+                    </label>
+                    <label htmlFor="account-alias">{t("昵称")}</label>
                     <input
-                      id="account-email"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
+                      id="account-alias"
+                      value={alias}
+                      onChange={(event) => setAlias(event.target.value)}
+                      maxLength={40}
                       required
-                      disabled={sent || busy}
                     />
-                    {sent && (
-                      <>
-                        <label htmlFor="account-code">{t("邮件验证码")}</label>
-                        <input
-                          id="account-code"
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          pattern="[0-9]{8}"
-                          maxLength={8}
-                          value={code}
-                          onChange={(event) => setCode(event.target.value)}
-                          required
-                          disabled={busy}
-                        />
-                        <button
-                          type="button"
-                          className="account-text"
-                          onClick={() => {
-                            setSent(false);
-                            setCode("");
-                          }}
-                        >
-                          {t("更换邮箱或重发")}
-                        </button>
-                      </>
-                    )}
+                    <label htmlFor="account-description">{t("介绍")}</label>
+                    <textarea
+                      id="account-description"
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      maxLength={500}
+                      rows={4}
+                      placeholder={t("说说你喜欢听什么…")}
+                    />
+                    <small className="account-email">{user?.email}</small>
                     <button className="account-primary" disabled={busy}>
-                      {busy
-                        ? t("请稍候…")
-                        : sent
-                          ? t("验证并登录")
-                          : t("发送验证码")}
+                      {busy ? t("请稍候…") : t("保存资料")}
                     </button>
                   </form>
-                )}
-                {!session.emailEnabled && !session.googleEnabled && (
-                  <p>{t("登录服务尚未配置")}</p>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="account-eyebrow">ASIDE / PROFILE</span>
-                <h2 id="account-title">{t("个人资料")}</h2>
-                <form onSubmit={save}>
-                  <label className="account-avatar-picker">
-                    <span className="account-avatar-large">
-                      {user?.avatarUrl ? (
-                        <img
-                          src={
-                            user.avatarUrl +
-                            (user.avatarUrl.startsWith("/api/")
-                              ? `?v=${avatarVersion}`
-                              : "")
-                          }
-                          alt=""
-                        />
-                      ) : (
-                        user?.alias.slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <span>
-                      {t("更换头像")}
-                      <small>PNG / JPEG / WebP · 2 MB</small>
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      onChange={(event) => void avatar(event.target.files?.[0])}
-                      disabled={busy}
-                    />
-                  </label>
-                  <label htmlFor="account-alias">{t("昵称")}</label>
-                  <input
-                    id="account-alias"
-                    value={alias}
-                    onChange={(event) => setAlias(event.target.value)}
-                    maxLength={40}
-                    required
-                  />
-                  <label htmlFor="account-description">{t("介绍")}</label>
-                  <textarea
-                    id="account-description"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    maxLength={500}
-                    rows={4}
-                    placeholder={t("说说你喜欢听什么…")}
-                  />
-                  <small className="account-email">{user?.email}</small>
-                  <button className="account-primary" disabled={busy}>
-                    {busy ? t("请稍候…") : t("保存资料")}
+                  <button
+                    className="account-text"
+                    onClick={() => void logout()}
+                    disabled={busy}
+                  >
+                    {t("退出登录")}
                   </button>
-                </form>
-                <button
-                  className="account-text"
-                  onClick={() => void logout()}
-                  disabled={busy}
-                >
-                  {t("退出登录")}
-                </button>
-                {session.googleEnabled && (
-                  <a className="account-text" href="/api/auth/google">
-                    {t("关联 Google 账号")}
-                  </a>
-                )}
-              </>
-            )}
-            {error && (
-              <p className="account-error" role="alert">
-                {error}
-              </p>
-            )}
-          </section>
-        </div>
-      )}
+                  {session?.googleEnabled && (
+                    <a className="account-text" href="/api/auth/google">
+                      {t("关联 Google 账号")}
+                    </a>
+                  )}
+                </>
+              )}
+              {error && (
+                <p className="account-error" role="alert">
+                  {error}
+                </p>
+              )}
+            </section>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

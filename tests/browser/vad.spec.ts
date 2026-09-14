@@ -56,6 +56,7 @@ for (const quiet of [false, true])
     });
     await page.goto("/");
     await page.getByRole("button", { name: /给思考留一点空间/ }).click();
+    await page.getByRole("button", { name: "开启麦克风", exact: true }).click();
     await page.getByRole("button", { name: "播放", exact: true }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "● 本地监听" }),

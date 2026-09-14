@@ -1,7 +1,9 @@
+import { LibraryDrawer } from "./LibraryDrawer";
+import { audioCard } from "./library-item";
 import { Landing } from "./Landing";
 import { AccountControl } from "./AccountControl";
 import { Space } from "./Space";
-import { PlayerView, formatPlayerTime } from "./PlayerView";
+import { PlayerView } from "./PlayerView";
 import { t, useLocale, message } from "./i18n";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,10 +17,10 @@ function App() {
     episodesLoading,
     episode,
     error,
-    configured,
     setError,
     load,
     enter,
+    playEpisode,
     authChanged,
   } = player;
   const [accountUser, setAccountUser] = useState<{ id: string } | null>(null);
@@ -47,23 +49,30 @@ function App() {
     setAccountUser(data.user);
     setAccountVersion((version) => version + 1);
   }
-  const playerMain = episode ? (
-    <PlayerView player={player} onAuthChanged={accountUpdated} />
-  ) : null;
   if (location.pathname === "/space")
     return (
       <Space
         accountControl={<AccountControl onAuthChanged={accountUpdated} />}
         accountVersion={accountVersion}
         activeEpisodeId={episode?.id}
-        player={playerMain}
+        player={
+          episode
+            ? (navigation) => (
+                <PlayerView
+                  player={player}
+                  onAuthChanged={accountUpdated}
+                  navigation={navigation}
+                />
+              )
+            : undefined
+        }
         onOpen={(id, userInitiated = true) => {
           window.history.replaceState(
             null,
             "",
             `/space?episode=${encodeURIComponent(id)}`,
           );
-          void (userInitiated ? enter(id) : load(id)).catch((cause) =>
+          void (userInitiated ? playEpisode(id) : load(id)).catch((cause) =>
             setError(cause.message),
           );
         }}
@@ -83,46 +92,37 @@ function App() {
     );
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <a className="brand" href="/">
-          aside<span>◖</span>
-        </a>
-        <p className="tagline">{t("好问题，不必等到最后。")}</p>
-        {accountUser && (
-          <a className="upload" href="/space">
-            {t("我的空间")}
-          </a>
-        )}
-        <div className="section-label">
-          {t("我的收听")}
-          <span>{episodes.length}</span>
-        </div>
-        <nav>
-          {episodes.map((e) => (
-            <button
-              className={`episode ${episode?.id === e.id ? "selected" : ""}`}
-              key={e.id}
-              onClick={() => void load(e.id).catch((e) => setError(e.message))}
+    <div className="shell without-sidebar">
+      <PlayerView
+        player={player}
+        onAuthChanged={accountUpdated}
+        navigation={
+          <>
+            <a className="brand" href="/" aria-label="Aside">
+              <span className="brand-word">Aside</span>
+              <img
+                className="brand-mark"
+                src="/aside-mark.svg"
+                alt=""
+                aria-hidden="true"
+              />
+            </a>
+            <LibraryDrawer
+              items={episodes.map(audioCard)}
+              label={t("公共音频库")}
+              onOpen={(id) =>
+                void playEpisode(id).catch((error) => setError(error.message))
+              }
             >
-              <span className="episode-icon">≋</span>
-              <span>
-                <strong>{e.title}</strong>
-                <small>
-                  {formatPlayerTime(e.durationMs)} ·{" "}
-                  {e.status === "ready" ? t("可以收听") : message(e.stage)}
-                </small>
-              </span>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <span className={`dot ${configured ? "green" : ""}`} />
-          {configured ? t("语音服务已配置") : t("本地模式 · 语音服务待配置")}
-          <small>{t("耳机听，更自在。")}</small>
-        </div>
-      </aside>
-      {playerMain}
+              {accountUser && (
+                <a className="player-space-link" href="/space">
+                  {t("我的空间")}
+                </a>
+              )}
+            </LibraryDrawer>
+          </>
+        }
+      />
     </div>
   );
 }

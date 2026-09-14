@@ -1,0 +1,295 @@
+import { useId, useRef, useState, useEffect, type ReactNode } from "react";
+import type { AudioLibraryItem } from "./library-item";
+import { t } from "./i18n";
+import "./library-drawer.css";
+
+function LibraryTitle({ title, scroll }: { title: string; scroll: boolean }) {
+  const viewport = useRef<HTMLElement>(null);
+  const text = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const container = viewport.current!;
+    const label = text.current!;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let animation: Animation | undefined;
+    const update = () => {
+      animation?.cancel();
+      const distance = label.scrollWidth - container.clientWidth;
+      if (!scroll || reduced.matches || distance <= 1) return;
+      const travel = Math.max(1800, (distance / 28) * 1000);
+      const duration = 1800 + travel + 1600;
+      animation = label.animate(
+        [
+          { transform: "translateX(0)", offset: 0 },
+          { transform: "translateX(0)", offset: 1800 / duration },
+          {
+            transform: `translateX(-${distance}px)`,
+            offset: (1800 + travel) / duration,
+          },
+          { transform: `translateX(-${distance}px)`, offset: 1 },
+        ],
+        { duration, iterations: Infinity, easing: "linear" },
+      );
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    observer.observe(label);
+    reduced.addEventListener("change", update);
+    update();
+    return () => {
+      animation?.cancel();
+      observer.disconnect();
+      reduced.removeEventListener("change", update);
+    };
+  }, [title, scroll]);
+  return (
+    <strong ref={viewport} className="library-title">
+      <span ref={text}>{title}</span>
+    </strong>
+  );
+}
+
+export function LibraryDrawer({
+  items,
+  label,
+  onOpen,
+  children,
+  footer,
+}: {
+  items: AudioLibraryItem[];
+  label: string;
+  onOpen: (id: string) => void;
+  children?: ReactNode;
+  footer?: ReactNode;
+}) {
+  const sidebar = useRef<HTMLElement>(null);
+  const [width, setWidth] = useState(256);
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  const drag = useRef<{ x: number; width: number } | null>(null);
+  const maximum = Math.floor(viewportWidth / 2);
+  const actualWidth = Math.max(220, Math.min(width, maximum));
+  useEffect(() => {
+    const resize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  const [desktop, setDesktop] = useState(
+    () => window.matchMedia("(min-width: 1001px)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1001px)");
+    const update = () => {
+      dialog.current?.close();
+      setOpened(false);
+      setDesktop(media.matches);
+    };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    const shell = sidebar.current?.closest<HTMLElement>(".without-sidebar");
+    if (!desktop || !shell) return;
+    shell.style.setProperty("--library-width", `${actualWidth}px`);
+    return () => {
+      shell.style.removeProperty("--library-width");
+    };
+  }, [desktop, actualWidth]);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [opened, setOpened] = useState(false);
+  const titleId = useId();
+  const dialogId = useId();
+  function close() {
+    dialog.current?.close();
+  }
+  const content = (
+    <>
+      {children}
+      <ul className="audio-library-list">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className={`audio-library-item${!item.canOpen ? " is-processing" : ""}`}
+          >
+            <button
+              className="audio-library-select"
+              title={item.title}
+              disabled={!item.canOpen}
+              onClick={() => {
+                onOpen(item.id);
+                close();
+              }}
+              aria-label={`${t("选择音频")} ${item.title}`}
+            >
+              <span className="audio-library-icon" aria-hidden="true">
+                <span className="audio-library-duration">
+                  {item.duration ?? "—"}
+                </span>
+                <svg
+                  className="audio-library-play"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                >
+                  <path d="M5 3.5a.7.7 0 0 1 1.05-.6l7 4.5a.7.7 0 0 1 0 1.2l-7 4.5A.7.7 0 0 1 5 12.5Z" />
+                </svg>
+              </span>
+              <span>
+                <LibraryTitle title={item.title} scroll={desktop} />
+                <small>{item.meta}</small>
+              </span>
+            </button>
+            {item.progress !== undefined && (
+              <progress
+                max={100}
+                value={item.progress}
+                aria-label={t("分析进度")}
+              />
+            )}
+            {item.actions && (
+              <div className="audio-library-actions">{item.actions}</div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {footer}
+    </>
+  );
+  if (desktop)
+    return (
+      <aside ref={sidebar} className="persistent-library" aria-label={label}>
+        <div className="persistent-library-brand">
+          <a className="brand" href="/" aria-label="Aside">
+            <span className="brand-word">Aside</span>
+            <img
+              className="brand-mark"
+              src="/aside-mark.svg"
+              alt=""
+              aria-hidden="true"
+            />
+          </a>
+        </div>
+        <header className="persistent-library-header">
+          <h2 id={titleId}>{t("音频库")}</h2>
+        </header>
+        <div className="library-drawer-content">{content}</div>
+        <div
+          className="library-resize-handle"
+          role="separator"
+          tabIndex={0}
+          aria-label={t("调整音频库宽度")}
+          aria-orientation="vertical"
+          aria-valuemin={220}
+          aria-valuemax={maximum}
+          aria-valuenow={actualWidth}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.currentTarget.focus();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            drag.current = { x: event.clientX, width: actualWidth };
+          }}
+          onPointerMove={(event) => {
+            if (!drag.current) return;
+            setWidth(
+              Math.max(
+                220,
+                Math.min(
+                  maximum,
+                  drag.current.width + event.clientX - drag.current.x,
+                ),
+              ),
+            );
+          }}
+          onPointerUp={(event) => {
+            drag.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onLostPointerCapture={() => {
+            drag.current = null;
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+          }}
+          onDoubleClick={() => setWidth(256)}
+          onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              return;
+            event.preventDefault();
+            setWidth(
+              event.key === "Home"
+                ? 220
+                : event.key === "End"
+                  ? maximum
+                  : Math.max(
+                      220,
+                      Math.min(
+                        maximum,
+                        actualWidth + (event.key === "ArrowRight" ? 16 : -16),
+                      ),
+                    ),
+            );
+          }}
+        />
+      </aside>
+    );
+  return (
+    <>
+      <button
+        ref={trigger}
+        className="library-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={opened}
+        aria-controls={dialogId}
+        onClick={() => {
+          dialog.current?.showModal();
+          setOpened(true);
+        }}
+      >
+        <span aria-hidden="true">☷</span> {t("音频库")}
+      </button>
+      <dialog
+        ref={dialog}
+        id={dialogId}
+        className="library-drawer"
+        aria-labelledby={titleId}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const controls = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), a[href], input:not(:disabled):not([type="file"]), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+            ),
+          ).filter(
+            (element) =>
+              element.tabIndex >= 0 && element.getClientRects().length > 0,
+          );
+          const first = controls[0];
+          const last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
+        onClose={() => {
+          setOpened(false);
+          trigger.current?.focus();
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) close();
+        }}
+      >
+        <div className="library-drawer-panel">
+          <header className="library-drawer-header">
+            <h2 id={titleId}>{label}</h2>
+            <button autoFocus onClick={close} aria-label={t("关闭音频库")}>
+              ×
+            </button>
+          </header>
+          <div className="library-drawer-content">{content}</div>
+        </div>
+      </dialog>
+    </>
+  );
+}

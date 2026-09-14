@@ -21,7 +21,7 @@ test("English browser default, persistent switch, and uninterrupted playback", a
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(
-    page.getByRole("heading", { name: /Your podcast.*Now a conversation/ }),
+    page.getByRole("heading", { name: /Recorded then.*Your turn now/ }),
   ).toBeVisible();
   await page.getByRole("button", { name: /给思考留一点空间/ }).click();
   await expect(page.getByRole("region", { name: "Transcript" })).toContainText(
@@ -42,7 +42,7 @@ test("English browser default, persistent switch, and uninterrupted playback", a
   await page.getByRole("button", { name: "Interface language" }).click();
   await page.getByRole("option", { name: "中文" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "文字稿" })).toBeVisible();
   await expect(page.getByRole("log")).toContainText("保留这段对话");
   expect(
     await audio!.evaluate(
@@ -52,9 +52,9 @@ test("English browser default, persistent switch, and uninterrupted playback", a
     ),
   ).toBe(true);
   await page.reload();
-  await expect(
-    page.getByRole("button", { name: "界面语言" }),
-  ).toContainText("中文");
+  await expect(page.getByRole("button", { name: "界面语言" })).toContainText(
+    "中文",
+  );
   await expect(page).toHaveTitle("Aside · 随时聊两句");
   await page.getByRole("button", { name: "界面语言" }).click();
   await page.getByRole("option", { name: "English" }).click();
@@ -91,7 +91,7 @@ test("Chinese browser works when preference storage is unavailable", async ({
   await page.getByRole("button", { name: "界面语言" }).click();
   await page.getByRole("option", { name: "English" }).click();
   await expect(
-    page.getByRole("heading", { name: /Your podcast.*Now a conversation/ }),
+    page.getByRole("heading", { name: /Recorded then.*Your turn now/ }),
   ).toBeVisible();
   await context.close();
 });

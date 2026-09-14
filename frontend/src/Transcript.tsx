@@ -40,7 +40,7 @@ export function Transcript({
   return (
     <>
       <div className="panel-heading">
-        <h2>{t("节目逐字稿")}</h2>
+        <h2>{t("文字稿")}</h2>
         {following ? (
           <span>{t("跟随播放")}</span>
         ) : (
@@ -57,7 +57,7 @@ export function Transcript({
         ref={viewport}
         tabIndex={0}
         role="region"
-        aria-label={t("节目逐字稿")}
+        aria-label={t("文字稿")}
         onWheel={() => setFollowing(false)}
         onTouchStart={() => setFollowing(false)}
         onPointerDown={() => setFollowing(false)}

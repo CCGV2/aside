@@ -1,0 +1,198 @@
+.landing .landing-library {
+  display: block;
+  position: relative;
+  isolation: isolate;
+  padding: 100px 0 60px;
+}
+.landing-library .library-intro {
+  text-align: center;
+}
+.landing .landing-library .hero-eyebrow {
+  justify-content: center;
+}
+.landing .landing-library h2 {
+  font-size: clamp(28px, 3.5vw, 44px);
+  font-weight: 600;
+  letter-spacing: -1.5px;
+}
+.landing-library > [data-reveal] > p {
+  max-width: none;
+  text-align: center;
+}
+.sample-collection {
+  margin-top: 44px;
+  min-width: 0;
+}
+.sample-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 40px) / 3);
+  gap: 20px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  padding: 8px 2px 20px;
+  margin: 0;
+  list-style: none;
+}
+.sample-rail > li {
+  display: flex;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+.sample-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  width: 100%;
+  min-height: 280px;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-radius: 20px;
+  color: var(--ink);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--panel) 85%, transparent),
+    color-mix(in srgb, var(--fill) 55%, transparent)
+  );
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease;
+}
+.sample-panel:is(:hover, :focus-visible) {
+  background-color: var(--panel);
+  border-color: var(--line-strong);
+}
+.sample-panel-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.sample-panel-meta > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sample-panel-meta > span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.sample-panel-wave {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 76px;
+  margin: 12px 0;
+  overflow: hidden;
+  color: #8198b0;
+}
+.sample-rail > li:nth-child(3n + 2) .sample-panel-wave {
+  color: #b59b89;
+}
+.sample-rail > li:nth-child(3n) .sample-panel-wave {
+  color: #9797b1;
+}
+.sample-panel-wave i {
+  display: block;
+  flex: 1 0 2px;
+  max-width: 4px;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0.55;
+  animation: sample-wave 1.2s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+.sample-panel:is(:hover, :focus-visible) .sample-panel-wave i {
+  animation-play-state: running;
+}
+@keyframes sample-wave {
+  to {
+    transform: scaleY(0.45);
+    opacity: 0.85;
+  }
+}
+.sample-panel strong {
+  display: block;
+  font-size: 19px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+.sample-panel-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 24px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.sample-panel-play {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--fill-strong);
+  color: var(--ink-2);
+}
+.sample-panel-play svg {
+  width: 16px;
+  height: 16px;
+}
+.sample-rail-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.sample-rail-controls button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--fill);
+  padding: 0;
+  font-size: 20px;
+}
+.sample-rail-controls button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+@media (max-width: 1000px) {
+  .sample-rail {
+    grid-auto-columns: calc((100% - 20px) / 2);
+  }
+}
+@media (max-width: 700px) {
+  .landing .landing-library {
+    padding: 60px 0 36px;
+  }
+  .sample-collection {
+    margin-top: 28px;
+  }
+  .sample-rail {
+    grid-auto-columns: 86%;
+    gap: 14px;
+  }
+  .sample-panel {
+    padding: 20px;
+    min-height: 270px;
+  }
+  .sample-panel strong {
+    font-size: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sample-panel {
+    transition: none;
+  }
+  .sample-panel-wave i {
+    animation: none;
+  }
+}

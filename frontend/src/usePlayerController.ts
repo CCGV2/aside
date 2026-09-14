@@ -11,7 +11,7 @@ export const names = {
   listening: "正在听你说",
   answering: "正在回答",
   awaiting_followup: "还想聊聊吗",
-  resuming: "回到节目",
+  resuming: "回到音频",
   reconnecting: "连接已断开",
 };
 function savePreference(key: string, value: string) {
@@ -35,6 +35,7 @@ export function usePlayerController() {
   const [debug, setDebug] = useState(false);
   const selected = useRef<Episode | undefined>(undefined);
   const loadVersion = useRef(0);
+  const autoplayVersion = useRef<number | null>(null);
   const refresh = async () => {
     try {
       setEpisodes(await episodeLibrary.list());
@@ -42,7 +43,8 @@ export function usePlayerController() {
       setEpisodesLoading(false);
     }
   };
-  async function load(id: string) {
+  async function load(id: string, autoplay = false) {
+    autoplayVersion.current = null;
     session.stop();
     const version = ++loadVersion.current;
     const [next, checkpoint] = await Promise.all([
@@ -52,8 +54,15 @@ export function usePlayerController() {
     if (version !== loadVersion.current) return;
     selected.current = next;
     session.load(next, checkpoint);
+    autoplayVersion.current = autoplay ? version : null;
     setEpisode(next);
   }
+  useEffect(() => {
+    if (episode && autoplayVersion.current === loadVersion.current) {
+      autoplayVersion.current = null;
+      session.start();
+    }
+  }, [episode, session]);
   useEffect(() => {
     let disposed = false;
     void episodeLibrary
@@ -148,24 +157,30 @@ export function usePlayerController() {
       setEpisode(undefined);
       await refresh();
     },
-    async enter(id: string) {
-      // Start the browser prompt in the entry click, without waiting for API reads.
-      session.setListeningMode("off");
-      const permission = requestMicrophonePermission().then(
-        () => true,
-        () => false,
-      );
-      await load(id);
+    async enableMicrophone() {
       const version = loadVersion.current;
-      const granted = await permission;
-      if (version !== loadVersion.current || selected.current?.id !== id)
-        return;
-      if (granted) session.setListeningMode("auto");
-      else session.setError("未获得麦克风权限，仍可继续收听或打字提问。");
-      void prepareTrial().catch((error) => {
-        if (version === loadVersion.current && selected.current?.id === id)
-          session.setError(error.message);
-      });
+      try {
+        await requestMicrophonePermission();
+        if (version === loadVersion.current && selected.current) {
+          session.setError("");
+          session.setListeningMode("auto");
+          void prepareTrial().catch((error) => {
+            if (version === loadVersion.current)
+              session.setError(error.message);
+          });
+        }
+      } catch {
+        if (version === loadVersion.current)
+          session.setError("未获得麦克风权限，仍可继续收听或打字提问。");
+      }
+    },
+    async playEpisode(id: string) {
+      session.setListeningMode("off");
+      await load(id, true);
+    },
+    async enter(id: string) {
+      session.setListeningMode("off");
+      await load(id);
     },
     async retry() {
       if (selected.current) {

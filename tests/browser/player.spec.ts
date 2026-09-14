@@ -9,13 +9,7 @@ test.beforeEach(async ({ page }) => {
 test("transcript sentence cue seeks and starts playback in the bottom player", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /给思考留一点空间/ }).click();
-  // The mic-permission alert appears shortly after entering and shifts the
-  // transcript down; wait for it before hovering or the hover target moves.
-  await page
-    .locator(".alert")
-    .waitFor({ state: "visible", timeout: 4000 })
-    .catch(() => {});
-  const transcript = page.getByRole("region", { name: "节目逐字稿" });
+  const transcript = page.getByRole("region", { name: "文字稿" });
   const passages = (await (await page.request.get("/api/episodes/demo-natural-resume")).json()).analysis.passages as { startMs: number }[];
   const line = transcript.locator(".transcript-line").nth(4);
   await line.scrollIntoViewIfNeeded();
@@ -86,7 +80,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /好问题，.*不必等到最后。/ }),
+    page.getByRole("heading", { name: /对话发生过，.*你依然可以加入。/ }),
   ).toBeVisible();
   await page.getByRole("button", { name: /给思考留一点空间/ }).click();
   await expect(
@@ -95,10 +89,10 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   await page.locator("audio").evaluate((a: HTMLAudioElement) => {
     a.currentTime = 0;
   });
-  const transcript = page.getByRole("region", { name: "节目逐字稿" });
+  const transcript = page.getByRole("region", { name: "文字稿" });
   await expect(transcript.locator(".transcript-line")).toHaveCount(6);
 
-  await page.locator("header").click();
+  await page.locator(".player-header").click();
   await page.keyboard.press("Space");
   await expect
     .poll(() =>
@@ -148,9 +142,10 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   await expect(
     page.getByRole("button", { name: "插一句", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("textbox", { name: "输入问题" }).fill("Why?");
-  await page.getByRole("button", { name: "发送问题" }).click();
+  await page.getByRole("textbox", { name: "输入消息" }).fill("Why?");
+  await page.getByRole("button", { name: "发送消息" }).click();
   await expect(page.locator(".return-note")).toContainText("0:00");
+  await expect(page.locator(".conversation-origin")).toHaveText(/从 \d+:\d{2} 开始聊/);
   expect(
     await page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
   ).toBe(true);
@@ -163,6 +158,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
     await page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
   ).toBe(true);
   await page.getByRole("button", { name: "继续听 ↗" }).click();
+  await expect(page.locator(".conversation-origin")).toHaveCount(0);
   await expect
     .poll(() =>
       page.locator("audio").evaluate((a: HTMLAudioElement) => a.paused),
@@ -176,7 +172,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   await page.getByRole("button", { name: "暂停", exact: true }).click();
   await expect(page.locator(".player-card")).not.toHaveClass(/compact/);
   await expect(page.locator(".cover")).toBeHidden();
-  const questionInput = page.getByRole("textbox", { name: "输入问题" });
+  const questionInput = page.getByRole("textbox", { name: "输入消息" });
   await questionInput.fill("hello");
   await questionInput.press("Space");
   await expect(questionInput).toHaveValue("hello ");
@@ -195,6 +191,7 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
   await page.getByRole("button", { name: "暂停", exact: true }).click();
   await expect(page.locator(".player-card")).not.toHaveClass(/compact/);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", {name:"聊两句",exact:true}).click();
   await expect
     .poll(() =>
       page
@@ -203,17 +200,17 @@ test("real demo playback, interruption, sentence rewind and responsive layout", 
     )
     .toBeLessThan(2);
   await page.screenshot({ path: "test-results/player-mobile.png" });
-  // While listening on mobile the transcript and chat become switchable tabs
+  // While listening on mobile the transcript and chat become collapsible panels
   // inside a viewport-locked layout.
   await page.getByRole("button", { name: "播放", exact: true }).click();
   await expect(page.locator(".player-card")).toHaveClass(/compact/);
-  await expect(page.getByRole("tab", { name: "节目逐字稿" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "文字稿" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "文字稿" })).toBeVisible();
   await expect(page.getByRole("log", { name: "对话记录" })).toBeHidden();
-  await page.getByRole("tab", { name: "聊两句" }).click();
+  await page.getByRole("button", { name: "聊两句" }).click();
   await expect(page.getByRole("log", { name: "对话记录" })).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "节目逐字稿" }),
+    page.getByRole("region", { name: "文字稿" }),
   ).toBeHidden();
   const dockBottom = await page
     .locator(".player-dock")
@@ -289,6 +286,7 @@ test("local AudioWorklet is armed without cloud; first speech captures WAV and s
   });
   await page.goto("/");
   await page.getByRole("button", { name: /给思考留一点空间/ }).click();
+  await page.getByRole("button", { name: "开启麦克风", exact: true }).click();
   await page.getByRole("button", { name: "播放", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "● 本地监听" }),
@@ -475,6 +473,7 @@ for (const manual of [false]) {
     });
     await page.goto("/");
     await page.getByRole("button", { name: /给思考留一点空间/ }).click();
+    await page.getByRole("button", { name: "开启麦克风", exact: true }).click();
     await page.getByRole("button", { name: "播放", exact: true }).click();
     if (!manual)
       await expect(
@@ -553,7 +552,7 @@ for (const manual of [false]) {
         );
       });
     }
-    await expect(page.locator(".status")).toContainText("回到节目");
+    await expect(page.locator(".status")).toContainText("回到音频");
     await page.evaluate(() => {
       (window as any).asideCloudChannel.send(
         JSON.stringify({

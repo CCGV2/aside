@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("guest Turnstile follows entry microphone permission and does not block playback", async ({ page }) => {
+test("guest can listen first; enabling the microphone requests permission before verification", async ({ page }) => {
   let trialReads = 0;
   let proofs = 0;
   let verified = false;
@@ -29,8 +29,11 @@ test("guest Turnstile follows entry microphone permission and does not block pla
     route.fulfill({ contentType: "application/javascript", body: "window.turnstile={render(el,options){const b=document.createElement('button');b.textContent='Test verification';b.onclick=()=>options.callback('token');el.append(b);return 'widget'},remove(){}};" }),
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "试听" }).click();
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await page.getByRole("button", { name: "体验示例" }).click();
+  await expect(page.getByRole("region", { name: "文字稿" })).toBeVisible();
+  expect(trialReads).toBe(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "开启麦克风", exact: true }).click();
   expect(await page.evaluate(() => (window as any).permissionRequested)).toBe(true);
   expect(trialReads).toBe(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -43,7 +46,7 @@ test("guest Turnstile follows entry microphone permission and does not block pla
   await expect.poll(() => page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.paused)).toBe(false);
 });
 
-test("signed-in entry gets microphone permission without a Turnstile dialog", async ({ page }) => {
+test("signed-in listener enables the microphone without a Turnstile dialog", async ({ page }) => {
   let trialReads = 0;
   await page.addInitScript(() => {
     navigator.mediaDevices.getUserMedia = async () => {
@@ -61,8 +64,11 @@ test("signed-in entry gets microphone permission without a Turnstile dialog", as
     return route.fulfill({ json: { verified: true, enabled: true, siteKey: "test", challenge: "signed-in" } });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "试听" }).click();
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await page.getByRole("button", { name: "体验示例" }).click();
+  await expect(page.getByRole("region", { name: "文字稿" })).toBeVisible();
+  expect(trialReads).toBe(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "开启麦克风", exact: true }).click();
   await expect.poll(() => trialReads).toBeGreaterThan(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });

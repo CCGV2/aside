@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+test.use({ viewport: { width: 390, height: 844 } });
 
 function shortWav() {
   const audio = Buffer.alloc(44 + 4800);
@@ -40,24 +41,26 @@ test("personal Space uploads into a private list and starts analysis automatical
   });
   await page.goto("/space");
   await expect(page.getByRole("heading", { name: "我的空间" })).toBeVisible();
-  await expect(page.getByText("从左侧选择音频开始收听")).toBeVisible();
+  await expect(page.getByText("打开音频库，选择一段开始收听")).toBeVisible();
   await expect(page.locator(".space-profile, .space-upload")).toHaveCount(0);
+  await page.getByRole("button", { name: "音频库", exact: true }).click();
   await expect(page.locator(".space-sidebar-limit")).toContainText("0 / 5 篇今日已用");
   await expect(page.locator(".space-sidebar-limit")).toContainText("单个音频最长 5 小时");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const chooserPromise = page.waitForEvent("filechooser");
-  await page.locator(".space-sidebar").getByRole("button", { name: "上传音频" }).click();
+  await page.locator(".library-drawer").getByRole("button", { name: "上传音频" }).click();
   await (await chooserPromise).setFiles({ name: "My recording.wav", mimeType: "audio/wav", buffer: shortWav() });
-  await expect(page.locator(".space-card").filter({ hasText: "My recording" })).toContainText("等待分析");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await expect(page.locator(".audio-library-list")).toContainText("等待分析");
+  await expect(page.getByRole("dialog", { name: "我的音频" })).toBeVisible();
   await expect(page.locator(".space-sidebar-limit")).toContainText("1 / 5 篇今日已用");
-  await expect(page.getByText("从左侧选择音频开始收听")).toBeVisible();
+  await expect(page.getByText("打开音频库，选择一段开始收听")).toBeVisible();
   expect(await page.getByRole("button", { name: "上传并自动分析" }).count()).toBe(0);
   expect(await page.getByRole("button", { name: "开始分析" }).count()).toBe(0);
   page.on("dialog", (dialog) => void dialog.accept());
-  await page.locator(".space-card").filter({ hasText: "My recording" }).getByRole("button", { name: "删除" }).click();
-  await expect(page.locator(".space-card").filter({ hasText: "My recording" })).toHaveCount(0);
+  await page.locator(".audio-library-list").getByRole("button", { name: "删除" }).click();
+  await expect(page.locator(".audio-library-item").filter({ hasText: "My recording" })).toHaveCount(0);
 });
 
 test("a guest sees the sign-in gate instead of a private library", async ({ page }) => {
@@ -112,35 +115,43 @@ test("Space keeps the private library beside its player, transcript, and convers
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
   });
   await page.goto("/space");
-  const sidebar = page.locator(".space-sidebar");
+  const sidebar = page.locator(".library-drawer");
   await expect(sidebar).toContainText("My saved audio");
   await expect(sidebar).not.toContainText("Public sample");
   await expect(page).toHaveURL(/\/space\?episode=33333333/);
-  const sidebarBox = await sidebar.boundingBox();
-  const mainBox = await page.locator(".space-page > main").boundingBox();
-  expect(sidebarBox && mainBox && sidebarBox.x + sidebarBox.width <= mainBox.x + 1).toBe(true);
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toBeVisible();
+  await expect(page.locator(".space-sidebar, .sidebar")).toHaveCount(0);
+  await expect(page.locator(".player-header").getByRole("button", { name: "音频库", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "文字稿" })).toBeVisible();
   await expect(page.getByText("A saved transcript line")).toBeVisible();
+  await page.getByRole("button", {name:"聊两句",exact:true}).click();
   await expect(page.getByRole("log", { name: "对话记录" })).toContainText("My earlier question");
   await expect(page.getByRole("log", { name: "对话记录" })).toContainText("My earlier answer");
-  await expect(sidebar.locator(".space-card.selected")).toContainText("My saved audio");
+  await expect(sidebar.locator(".archive-detail")).toHaveCount(0);
   await expect(sidebar).not.toContainText("Public sample");
-  await page.getByRole("button", { name: "继续听 Another private audio" }).click();
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toContainText("A different transcript line");
+  await page.getByRole("button", { name: "音频库", exact: true }).click();
+  await page.getByRole("button", { name: "选择音频 Another private audio" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "文字稿" })).toContainText("A different transcript line");
+  await expect(page.getByRole("button", { name: "音频库", exact: true })).toBeFocused();
+  await page.getByRole("button", {name:"聊两句",exact:true}).click();
   await expect(page.getByRole("log", { name: "对话记录" })).toContainText("Second question");
   await expect(page.getByRole("log", { name: "对话记录" })).not.toContainText("My earlier question");
-  await expect(sidebar.locator(".space-card.selected")).toContainText("Another private audio");
+  await page.getByRole("button", {name:"文字稿",exact:true}).click();
+  await page.screenshot({ path: "test-results/archive-private-desktop.png", animations: "disabled" });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "音频库", exact: true }).click();
   const fileChooser = page.waitForEvent("filechooser");
   await sidebar.getByRole("button", { name: "上传音频" }).click();
   await (await fileChooser).setFiles({ name: "New side upload.wav", mimeType: "audio/wav", buffer: shortWav() });
-  await expect(sidebar.locator(".space-card").filter({ hasText: "New side upload" })).toContainText("等待分析");
+  await expect(sidebar.locator(".audio-library-list")).toContainText("等待分析");
   await expect(sidebar.locator(".space-sidebar-limit")).toContainText("3 / 5 篇今日已用");
   await expect(page).toHaveURL(/\/space\?episode=44444444/);
-  await expect(page.getByRole("region", { name: "节目逐字稿" })).toContainText("A different transcript line");
+  await sidebar.getByRole("button", { name: "关闭音频库" }).click();
+  await expect(page.getByRole("region", { name: "文字稿" })).toContainText("A different transcript line");
   await expect(page.locator(".space-profile, .space-upload")).toHaveCount(0);
   await expect(sidebar).toContainText("My saved audio");
+  await page.screenshot({ path: "test-results/archive-private-mobile.png", animations: "disabled", fullPage: true });
 });
 
 test("loaded library pages remain visible after the automatic refresh", async ({ page }) => {
@@ -165,10 +176,41 @@ test("loaded library pages remain visible after the automatic refresh", async ({
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
   });
   await page.goto("/space");
+  await page.getByRole("button", { name: "音频库", exact: true }).click();
   await page.getByRole("button", { name: "加载更多" }).click();
-  const sidebar = page.locator(".space-sidebar");
+  const sidebar = page.locator(".library-drawer");
   await expect(sidebar.getByText("Older recording")).toBeVisible();
   await page.waitForTimeout(5500);
   await expect(sidebar.getByText("New recording")).toBeVisible();
   await expect(sidebar.getByText("Older recording")).toBeVisible();
+});
+
+test("library drawer retains retry, upload cancellation, and analysis progress", async ({ page }) => {
+  let pending = [{ id: "pending-upload", title: "Interrupted upload", size: 1024 }];
+  let retried = false;
+  const episodes = [
+    { id: "failed-audio", title: "Needs retry", durationMs: 0, status: "failed", stage: "分析失败", progress: 0 },
+    { id: "processing-audio", title: "Being analyzed", durationMs: 0, status: "analyzing", stage: "正在分析", progress: 0.42 },
+  ];
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (method === "DELETE" && path.includes("pending-upload")) pending = [];
+    if (method === "POST" && path.includes("failed-audio")) retried = true;
+    const data = path === "/api/auth/session"
+      ? { user: { id: "test", alias: "Listener" }, emailEnabled: true, googleEnabled: false }
+      : path === "/api/health" ? { uploadsEnabled: true, trial: false }
+      : path === "/api/space/episodes" ? { episodes, pending, usedToday: 2, dailyLimit: 5, usedStorage: 0, storageLimit: 100000, nextCursor: null }
+      : path === "/api/episodes" ? [] : { ok: true };
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/space");
+  await page.getByRole("button", { name: "音频库", exact: true }).click();
+  const library = page.getByRole("dialog", { name: "我的音频" });
+  await library.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(library.getByRole("button", { name: "选择音频 Interrupted upload" })).toHaveCount(0);
+  await library.getByRole("button", { name: "重试分析" }).click();
+  expect(retried).toBe(true);
+  await expect(library.getByRole("progressbar")).toHaveAttribute("value", "42");
+  await expect(library.getByRole("button", { name: "听这段", exact: true })).toHaveCount(0);
 });
