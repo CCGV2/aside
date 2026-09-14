@@ -133,3 +133,9 @@ npm run db:cloudflare:production
 2026-09-13：访客进入节目时，浏览器先请求麦克风权限；权限流程结束后显示 Turnstile，取消仍可收听，第一次付费操作会再次要求验证。访客证明绑定匿名身份与 IP，有效期从 30 分钟延长到 6 小时，覆盖最长 5 小时音频。已登录账号在服务端免 Turnstile，仍保留账号、IP、全站每日额度及请求速率限制；上传仍要求登录且每天最多 5 篇。
 
 构建、69 项项目测试、26 项 Worker 集成测试和 23 项 Chrome 回归通过；浏览器回归覆盖权限与验证顺序、登录收听和上传免弹窗。生产 Worker `8c84cdca-7b0a-4fd1-a8a5-bf30470d34e2` 已接收 100% 流量，保留 `EMAIL` binding 和 `ALLOW_UPLOADS=true`。正式域名 `/`、`/space` 均加载新资源 `index-DxsyK5sI.js`；JS/CSS 返回 HTTP 200 且 MIME 正确，`/api/health` 显示 `trial=true`、`uploadsEnabled=true`，未登录 `/api/trial` 返回 `verified=false`。未在生产账号执行付费提问或真实上传。
+
+## 搜索引擎元数据与 llms.txt
+
+2026-09-14：`frontend/index.html` 补齐 description、canonical、robots、Open Graph/Twitter 卡片、Json-LD（`WebSite` + `WebApplication`）与 `noscript` 兜底；`frontend/src/i18n.ts` 按语言同步 title、description 和 OG 标签，`/space` 注入 `noindex, nofollow` 并移除 landing canonical。新增 `robots.txt`、`sitemap.xml`、`llms.txt` 和 1200×630 `og-image.png`（由 `scripts/prepare-og-image.mjs` 生成，重复执行哈希不变）。`llms.txt` 里的时长、大小和每日额度与 `engine/src/core.ts`、`cloudflare/src/uploads.ts` 对齐。
+
+`npm run check`、69 项项目测试和 2 项语言浏览器用例通过，生产构建产物包含四个静态文件。生产 Worker `89f194eb-bed9-46c3-bb39-3bfbe60f8b46` 已接收 100% 流量（`--containers-rollout=none`，保留现有 Container）。正式域名 `/`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 HTTP 200，MIME 依次为 `text/html`、`text/plain`、`application/xml`、`text/plain`、`image/png`；`/api/health` 200 且 `uploadsEnabled=true`。浏览器实测中英文 title/robots/canonical 以及 `/space` 的 noindex 均生效。`/space` 的 noindex 仍由客户端注入，不执行 JS 的爬虫看不到，后续可改由 Worker 返回 `X-Robots-Tag`。
