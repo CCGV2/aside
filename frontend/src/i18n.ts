@@ -30,13 +30,46 @@ const listeners = new Set<() => void>();
 export function getLocale() {
   return locale;
 }
+const titles: Record<Locale, string> = {
+  zh: "Aside · 用语音打断播客，随口提问接着听",
+  en: "Aside · Interrupt a podcast, ask out loud, keep listening",
+};
+const descriptions: Record<Locale, string> = {
+  zh: "Aside 是一个可以插话的播客播放器：听到好奇的地方开口提问，AI 结合前文回答，聊完从完整的一句话接着听。",
+  en: "Aside is a podcast player you can talk back to: interrupt an episode to ask by voice, keep the conversation going, and resume from a complete sentence.",
+};
+const spaceTitles: Record<Locale, string> = {
+  zh: "我的空间 · Aside",
+  en: "Your space · Aside",
+};
+const indexRobots =
+  "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+function setMeta(selector: string, content: string) {
+  const element = document.head.querySelector(selector);
+  if (element) element.setAttribute("content", content);
+}
 function updateDocument() {
   if (typeof document === "undefined") return;
-  document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
-  document.title =
-    locale === "zh"
-      ? "Aside · 随时聊两句"
-      : "Aside · A little room for conversation";
+  const zh = locale === "zh";
+  // The signed-in space is private: keep it out of the index and drop the
+  // landing canonical so the two pages never claim the same URL.
+  const privatePage = location.pathname === "/space";
+  document.documentElement.lang = zh ? "zh-CN" : "en";
+  document.title = privatePage ? spaceTitles[locale] : titles[locale];
+  setMeta('meta[name="description"]', descriptions[locale]);
+  setMeta('meta[property="og:title"]', titles[locale]);
+  setMeta('meta[property="og:description"]', descriptions[locale]);
+  setMeta('meta[property="og:locale"]', zh ? "zh_CN" : "en_US");
+  setMeta('meta[property="og:locale:alternate"]', zh ? "en_US" : "zh_CN");
+  setMeta('meta[name="twitter:title"]', titles[locale]);
+  setMeta('meta[name="twitter:description"]', descriptions[locale]);
+  setMeta(
+    'meta[name="robots"]',
+    privatePage ? "noindex, nofollow" : indexRobots,
+  );
+  const canonical = document.head.querySelector('link[rel="canonical"]');
+  if (privatePage) canonical?.remove();
+  else if (canonical) canonical.setAttribute("href", "https://asidefm.com/");
 }
 updateDocument();
 export function setLocale(next: Locale) {

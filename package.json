@@ -13,6 +13,7 @@
     "check": "tsc --noEmit && node scripts/check-boundaries.mjs && npm run check:cloudflare",
     "test": "node --import tsx --test tests/*.test.ts",
     "demo": "node --import tsx scripts/create-demo.ts",
+    "prepare:og": "node scripts/prepare-og-image.mjs",
     "format": "prettier --write engine backend frontend scripts tests *.json",
     "test:e2e": "playwright test",
     "check:cloudflare": "tsc --noEmit -p cloudflare/tsconfig.json",

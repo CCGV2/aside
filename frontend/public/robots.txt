@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# API responses are JSON; /space is a signed-in page that carries a noindex meta tag.
+Disallow: /api/
+
+Sitemap: https://asidefm.com/sitemap.xml

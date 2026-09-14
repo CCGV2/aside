@@ -55,7 +55,7 @@ test("English browser default, persistent switch, and uninterrupted playback", a
   await expect(page.getByRole("button", { name: "界面语言" })).toContainText(
     "中文",
   );
-  await expect(page).toHaveTitle("Aside · 随时聊两句");
+  await expect(page).toHaveTitle("Aside · 用语音打断播客，随口提问接着听");
   await page.getByRole("button", { name: "界面语言" }).click();
   await page.getByRole("option", { name: "English" }).click();
   await page.setViewportSize({ width: 390, height: 844 });

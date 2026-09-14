@@ -1,0 +1,25 @@
+# Aside
+
+> Aside is a podcast player you can talk back to: interrupt an episode to ask out loud, get an answer grounded in what you already heard, then resume from a complete sentence.
+> Aside 是一个可以插话的播客播放器：听到好奇的地方开口提问，AI 结合前文回答，聊完从完整的一句话接着听。
+
+Aside runs in the browser at https://asidefm.com/. Listening to the public
+sample library needs no account; a signed-in personal space adds uploads,
+transcripts and per-audio conversation history.
+
+- Interface languages: Chinese and English. Answers follow the language of the question.
+- Audio: public samples play immediately; signed-in accounts can upload their own audio (up to 5 hours / 1 GiB per file, 5 uploads per UTC day).
+- Voice: a live session is opened on demand when you speak; voice-activity detection runs locally in the browser.
+- Platform: Cloudflare Workers, D1 for text and state, R2 for audio.
+
+## Main
+
+- [Aside web app](https://asidefm.com/): public sample library, voice interruption, transcript and conversation, personal space after sign-in.
+- [Source repository](https://github.com/qiz029/aside): TypeScript monorepo (engine, backend, frontend, Cloudflare worker), Apache-2.0.
+
+## Optional
+
+- [Architecture](https://github.com/qiz029/aside/blob/main/.docs/architecture.md): module boundaries, analysis and question pipelines, session lifecycle.
+- [Cloudflare backend](https://github.com/qiz029/aside/blob/main/.docs/cloudflare.md): Workers, D1, R2, Workflows and the media container.
+- [Accounts](https://github.com/qiz029/aside/blob/main/.docs/accounts.md) and [personal space](https://github.com/qiz029/aside/blob/main/.docs/personal-space.md): email/Google sign-in, upload quota, private library.
+- [Development](https://github.com/qiz029/aside/blob/main/.docs/development.md): local commands, tests and troubleshooting.
