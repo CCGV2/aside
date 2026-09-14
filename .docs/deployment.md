@@ -203,3 +203,9 @@ npm run db:cloudflare:production
 线上核对：`/api/episodes` 返回 8 条；两个新条目为 `zh` + `languageVisibility: ["zh-cn"]`，`source: "provider"`，voice masculine，狂人日记 26 passages/26 anchors、阿Q正传 54 passages/26 anchors（锚点按句切分，说明标点修复生效）；完整下载 SHA-256 与本地一致。浏览器实测中文页把「阿Q正传」「狂人日记」排在最前，其余 6 条英文内容带「英文」标记，红楼梦已从列表消失。`npm run check` 与 92 项测试通过。
 
 未验证：`tests/browser/public-samples.spec.ts` 的条目数断言仍是 6（英文页确实 6 条，两个中文样本 visibility 为 `["zh-cn"]` 会被过滤），但本地 `.data` 无公开样本数据、仍未执行；鲁迅两条的实际听感没有人工听过；逐字稿仍有该读者/素材固有的字级错误（如"须十分小心"→"需十分小心"、"古久先生"→"古九先生"）。
+
+## 首页声波流动与 Hero 过渡
+
+2026-09-14：Hero 声波从整组上下起伏改为波纹在两个固定鼓包内缓慢横向流动（`HeroSoundscape.tsx` 按帧重算路径），离开视口或页面隐藏时停止，交互示意第 2、3 步（说话/暂停）减速停下，`prefers-reduced-motion` 下保持静止。Hero 只发布 `--hero-progress` 与 `--hero-exit`（二次缓入），声波的下沉/压扁/淡出和文案的上移/淡出都由 CSS 计算。两层背景光晕（`.story-pin` 伪元素与 `.hero::after`）左右加渐隐遮罩，去掉距视口边缘 12px 处的硬边；Hero 最小高度收紧、钉住区改为 1:2 的上下留白，按钮到下一屏标题的间距 1440×900 从约 165px 降到 107px，390×844 从约 245px 降到 142px。
+
+`npm run check`、93 项项目测试和滚动叙事浏览器用例通过；本地在 4 倍 CPU 降速下桌面与手机帧 p95 约 17.5ms。生产 Worker `228f2bf5-6c8d-4c7d-a1c6-cc1297fbc385`（`--containers-rollout=none`，保留现有 Container），绑定仍含 `EMAIL`、`ALLOW_UPLOADS=true`。正式域名 `/` 引用 `index-QRrIwGIu.js`、`index-CU7YqdCy.css`，均 200 且 MIME 正确；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200。线上浏览器实测桌面与手机声波在流动、间距与本地一致、滚动时文案淡出生效、无控制台错误。其余需要后端数据的浏览器用例本轮未执行；动效观感只看了截图，没有录屏人工复核。
