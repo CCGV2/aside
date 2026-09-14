@@ -14,11 +14,33 @@ export interface SampleSpec {
   languageVisibility?: string[];
   transcriptionStartMs?: number;
   transcriptionEndMs?: number;
+  /** Steering text for the transcriber, e.g. to keep CJK sentence punctuation. */
+  transcriptionPrompt?: string;
   excerptStartMs: number;
   excerptEndMs: number;
 }
 
-/** Audio hosts the preparation run is allowed to download from. */
+export interface TtsSampleSpec {
+  id: string;
+  title: string;
+  author: string;
+  publisher: string;
+  sourceUrl: string;
+  license: string;
+  licenseUrl: string;
+  summary: string;
+  hostStyle: string;
+  language?: string;
+  languageVisibility?: string[];
+  /** Provider voice and its presentation, used for the analysis voice fields. */
+  model: string;
+  voice: string;
+  presentation: "masculine" | "feminine";
+  /** One sentence per line, relative to the repository root. */
+  textFile: string;
+}
+
+/** Audio hosts the preparation runs are allowed to download from. */
 export const AUDIO_HOSTS = ["archive.org", "catalog.archives.gov"];
 
 const REQUIRED_TEXT = [
@@ -29,18 +51,38 @@ const REQUIRED_TEXT = [
   "license",
   "licenseUrl",
   "summary",
-  "sourceSha256",
 ] as const;
 
 /**
- * Rejects a spec before anything is downloaded or sent to a paid provider.
- * Attribution is mandatory: every published sample is credited to a named
- * source under a named licence, and a fallback would quietly credit whichever
- * source that fallback happens to name.
+ * Rejects a spec before anything is downloaded, synthesized or sent to a paid
+ * provider. Attribution is mandatory: every published sample is credited to a
+ * named source under a named licence, and a fallback would quietly credit
+ * whichever source that fallback happens to name.
  */
+function requireCredits(
+  id: string,
+  spec: Partial<Record<(typeof REQUIRED_TEXT)[number], string>>,
+) {
+  const missing = REQUIRED_TEXT.filter((field) => !spec[field]?.trim());
+  if (missing.length)
+    throw Error(
+      `${id}: attribution and credits are required: ${missing.join(", ")}`,
+    );
+}
+
+function requireId(id: string) {
+  if (!/^[a-z][a-z0-9-]+$/.test(id)) throw Error(`Invalid sample id: ${id}`);
+}
+
+function requireVisibility(id: string, visibility?: string[]) {
+  if (visibility?.length === 0)
+    throw Error(
+      `${id}: languageVisibility is empty; omit it to publish on the recording's own language page`,
+    );
+}
+
 export function validateSpec(spec: SampleSpec): void {
-  if (!/^[a-z][a-z0-9-]+$/.test(spec.id))
-    throw Error(`Invalid sample id: ${spec.id}`);
+  requireId(spec.id);
   if (!/^[a-zA-Z0-9-]+$/.test(spec.sourceId))
     throw Error(`${spec.id}: invalid sourceId: ${spec.sourceId}`);
   let audio: URL;
@@ -51,13 +93,28 @@ export function validateSpec(spec: SampleSpec): void {
   }
   if (audio.protocol !== "https:" || !AUDIO_HOSTS.includes(audio.hostname))
     throw Error(`${spec.id}: unapproved audio host: ${spec.audioUrl}`);
-  const missing = REQUIRED_TEXT.filter((field) => !spec[field]?.trim());
-  if (missing.length)
-    throw Error(
-      `${spec.id}: attribution and credits are required: ${missing.join(", ")}`,
-    );
-  if (spec.languageVisibility?.length === 0)
-    throw Error(
-      `${spec.id}: languageVisibility is empty; omit it to publish on the recording's own language page`,
-    );
+  requireCredits(spec.id, spec);
+  if (!spec.sourceSha256?.trim())
+    throw Error(`${spec.id}: sourceSha256 is required`);
+  requireVisibility(spec.id, spec.languageVisibility);
+}
+
+/**
+ * Synthesized narration has no source audio to hash, but it does need the same
+ * credits, plus the synthesis settings and a text file inside the repository.
+ */
+export function validateTtsSpec(spec: TtsSampleSpec): void {
+  requireId(spec.id);
+  requireCredits(spec.id, spec);
+  if (!spec.hostStyle?.trim()) throw Error(`${spec.id}: hostStyle is required`);
+  if (!spec.model?.trim() || !spec.voice?.trim())
+    throw Error(`${spec.id}: model and voice are required`);
+  if (spec.presentation !== "masculine" && spec.presentation !== "feminine")
+    throw Error(`${spec.id}: presentation must be masculine or feminine`);
+  if (
+    !spec.textFile?.startsWith("content/texts/") ||
+    spec.textFile.includes("..")
+  )
+    throw Error(`${spec.id}: textFile must live under content/texts/`);
+  requireVisibility(spec.id, spec.languageVisibility);
 }

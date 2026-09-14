@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { AudioProvider } from "../backend/src/audio-provider.js";
 import { makeAnalysis } from "@aside/engine/server";
 import { validateSpec, type SampleSpec } from "./sample-spec.js";
+import { writeSeedSql } from "./seed-sql.js";
 import { sentenceGroups } from "./sentence-groups.js";
 import type { Episode, Passage } from "@aside/engine/core";
 const exec = promisify(execFile);
@@ -70,7 +71,11 @@ for (const spec of specs) {
       ]);
       transcriptionAudio = await readFile(window);
     }
-    transcript = await provider.transcribeAudio(transcriptionAudio, offset);
+    transcript = await provider.transcribeAudio(
+      transcriptionAudio,
+      offset,
+      spec.transcriptionPrompt,
+    );
     await writeFile(transcriptFile, JSON.stringify(transcript, null, 2));
   }
   if (process.env.TRANSCRIBE_ONLY === "1") {
@@ -187,28 +192,7 @@ for (const spec of specs) {
     analysis,
   };
   await writeFile(`${dir}/${spec.id}.json`, JSON.stringify(episode, null, 2));
-  const { analysis: _, ...metadata } = episode;
-  const key = `episodes/${spec.id}/analysis-v1/complete.json`;
-  const json = JSON.stringify(analysis);
-  const sql = [`DELETE FROM artifacts WHERE key=${quote(key)};`];
-  // Chunk by UTF-8 bytes below D1's per-statement limit.
-  let chunk = "",
-    part = 0;
-  const flush = () => {
-    sql.push(
-      `INSERT INTO artifacts(key,part,value) VALUES(${quote(key)},${part++},${quote(chunk)});`,
-    );
-    chunk = "";
-  };
-  for (const char of json) {
-    if (Buffer.byteLength(chunk + char) > 45000) flush();
-    chunk += char;
-  }
-  if (chunk) flush();
-  sql.push(
-    `INSERT INTO episodes(id,owner_id,public,metadata,analysis_key,created_at) VALUES(${quote(spec.id)},'official',1,${quote(JSON.stringify(metadata))},${quote(key)},${quote(metadata.createdAt)}) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata,analysis_key=excluded.analysis_key,public=1;`,
-  );
-  await writeFile(`${dir}/${spec.id}.sql`, sql.join("\n") + "\n");
+  await writeSeedSql(dir, episode);
   console.log(
     JSON.stringify({
       id: spec.id,

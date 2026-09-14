@@ -36,7 +36,7 @@ export interface Analysis {
   hostStyle: string;
   voice: "masculine" | "feminine";
   voiceReason: string;
-  source: "provider" | "demo";
+  source: "provider" | "demo" | "synthesis";
 }
 export interface Episode {
   attribution?: {

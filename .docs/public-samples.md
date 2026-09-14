@@ -1,21 +1,52 @@
 # Public samples
 
-The public library holds six historical recordings. All six are U.S. government works and carry no copyright in the United States (17 U.S.C. §105): the recordings were made by federal agencies or by a private company that conveyed its rights to the government, and the masters are held by the National Archives.
+The public library holds eight recordings: six historical U.S. government recordings and two LibriVox readings of Lu Xun.
 
-| ID                        | Title                                   | Publisher                                       | Source                                                                 | Excerpt             | Duration |
-| ------------------------- | --------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------- | ------------------- | -------- |
-| `jfk-rice-moon`           | We Choose to Go to the Moon             | John F. Kennedy Presidential Library and Museum | [archive.org `jfks19620912`](https://archive.org/details/jfks19620912) | 08:14.120–12:02.180 | 3:48     |
-| `reagan-brandenburg-gate` | Tear Down This Wall                     | Ronald Reagan Presidential Library and Museum   | [NARA 7087579](https://catalog.archives.gov/id/7087579)                | 30:24.820–32:38.000 | 2:13     |
-| `chronoscope-kennedy`     | John F. Kennedy on the 1952 Senate Race | NARA · Longines Chronoscope                     | [NARA 95777](https://catalog.archives.gov/id/95777)                    | 00:35.040–04:09.680 | 3:35     |
-| `chronoscope-warren`      | Earl Warren Runs for President          | NARA · Longines Chronoscope                     | [NARA 95746](https://catalog.archives.gov/id/95746)                    | 01:34.720–04:57.580 | 3:23     |
-| `chronoscope-moses`       | Robert Moses on Urban Renewal           | NARA · Longines Chronoscope                     | [NARA 95822](https://catalog.archives.gov/id/95822)                    | 00:59.800–04:05.540 | 3:06     |
-| `chronoscope-byrd`        | Richard E. Byrd, Explorer               | NARA · Longines Chronoscope                     | [NARA 95934](https://catalog.archives.gov/id/95934)                    | 01:24.990–04:17.710 | 2:53     |
+The six government recordings carry no copyright in the United States (17 U.S.C. §105): they were made by federal agencies or by a private company that conveyed its rights to the government, and the masters are held by the National Archives.
+
+`luxun-madmans-diary` and `luxun-ah-q` are LibriVox volunteer recordings of Lu Xun, dedicated to the public domain by LibriVox and read by people. Their basis is different again: the texts were published in 1918–1923 and are public domain in the United States, and the recordings are public-domain _performances_ rather than government works.
+
+| ID                        | Title                                   | Publisher                                       | Source                                                                                             | Excerpt             | Duration |
+| ------------------------- | --------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------- | -------- |
+| `jfk-rice-moon`           | We Choose to Go to the Moon             | John F. Kennedy Presidential Library and Museum | [archive.org `jfks19620912`](https://archive.org/details/jfks19620912)                             | 08:14.120–12:02.180 | 3:48     |
+| `reagan-brandenburg-gate` | Tear Down This Wall                     | Ronald Reagan Presidential Library and Museum   | [NARA 7087579](https://catalog.archives.gov/id/7087579)                                            | 30:24.820–32:38.000 | 2:13     |
+| `chronoscope-kennedy`     | John F. Kennedy on the 1952 Senate Race | NARA · Longines Chronoscope                     | [NARA 95777](https://catalog.archives.gov/id/95777)                                                | 00:35.040–04:09.680 | 3:35     |
+| `chronoscope-warren`      | Earl Warren Runs for President          | NARA · Longines Chronoscope                     | [NARA 95746](https://catalog.archives.gov/id/95746)                                                | 01:34.720–04:57.580 | 3:23     |
+| `chronoscope-moses`       | Robert Moses on Urban Renewal           | NARA · Longines Chronoscope                     | [NARA 95822](https://catalog.archives.gov/id/95822)                                                | 00:59.800–04:05.540 | 3:06     |
+| `chronoscope-byrd`        | Richard E. Byrd, Explorer               | NARA · Longines Chronoscope                     | [NARA 95934](https://catalog.archives.gov/id/95934)                                                | 01:24.990–04:17.710 | 2:53     |
+| `luxun-madmans-diary`     | 狂人日记                                | LibriVox                                        | [archive.org `call_to_arms_jl_librivox`](https://archive.org/details/call_to_arms_jl_librivox)     | 01:15.000–05:00.040 | 3:45     |
+| `luxun-ah-q`              | 阿Q正传                                 | LibriVox                                        | [archive.org `truestoryahq_1612_librivox`](https://archive.org/details/truestoryahq_1612_librivox) | 00:29.320–04:39.540 | 4:10     |
 
 `jfk-rice-moon` is President Kennedy's address on the space effort at Rice University Stadium, Houston, September 12, 1962. The excerpt runs from "Its conquest deserves the best of all mankind" through "and in this decade we shall make up and move ahead", and contains the "We choose to go to the moon in this decade… not because they are easy, but because they are hard" passage.
 
 `reagan-brandenburg-gate` is President Reagan's address to the citizens of Berlin at the Brandenburg Gate, June 12, 1987, from the White House Communications Agency tape PP7163C. The excerpt runs from "And now, now the Soviets themselves may in a limited way be coming to understand the importance of freedom" through "Mr. Gorbachev, tear down this wall" and the applause that follows. The NARA item also contains remarks by Chancellor Helmut Kohl; the excerpt excludes them.
 
 The four `chronoscope-*` entries are episodes of _Longines Chronoscope_, a 15-minute interview programme carried on CBS-affiliated stations from 1951 to 1955, hosted by William Bradford Huie with a rotating co-editor. Each excerpt is one continuous stretch of the interview.
+
+## Lu Xun readings
+
+`luxun-madmans-diary` is 《狂人日记》, the first story in 《呐喊》 — the first short story written in vernacular Chinese, and the source of the collection's closing line 「救救孩子」. `luxun-ah-q` is chapter one of 《阿Q正传》. Both come from LibriVox's Chinese catalogue, which is small (25 titles) and holds no 红楼梦, 三国, 水浒 or 西游.
+
+Two things about this material:
+
+- **Every LibriVox file opens with a spoken boilerplate** in Chinese ("此次 LibriVox 录音由公众所有…"), and each 呐喊 section is one story, so the section had to be identified by transcribing its opening — section 02 is 狂人日记, not section 01, which is the 自叙. The windows above start after the boilerplate and after 狂人日记's classical preface, which Whisper transcribes badly.
+- **Whisper does not always punctuate Chinese.** The first pass over 阿Q正传 returned 1,585 characters with no `。` at all, which would have left the resume anchors falling back to the 25-second cap and the transcript unreadable. The `transcriptionPrompt` field exists for this: a short punctuated sample restores the sentence marks (the same audio then returned 35 `。`). It is set on both Lu Xun specs.
+
+Resume anchors come from the same `sentenceGroups` splitter as the English samples, which matches `。！？…` as well as Latin punctuation.
+
+## Synthesized narration (withdrawn)
+
+`content/tts-samples.json` and `scripts/prepare-tts-samples.ts` are a second preparation path, for public-domain texts that have no recording we may use. The spec names the provider model and voice, and a text file under `content/texts/` holding one sentence per line.
+
+```sh
+node --env-file=.env --import tsx scripts/prepare-tts-samples.ts
+```
+
+The run synthesizes each sentence separately, measures it with ffprobe, and concatenates the parts, so the transcript offsets _are_ the spoken boundaries rather than a transcription of them. Each sentence becomes one passage and one resume anchor. Nothing is transcribed and no audio model reviews the result, so the analysis is marked `source: "synthesis"`, and the spec has to supply the `summary` and `hostStyle` that a review would otherwise produce. Synthesis is cached per sentence under `.wrangler/tts-cache/`, so a re-run costs nothing and only an edited sentence is re-synthesized.
+
+This sample was published and then withdrawn: the narration was judged too mechanical for a listing beside human recordings, so `content/tts-samples.json` is now empty and 红楼梦 is no longer public. The path stays because it is the only way to publish a public-domain text that has no recording anyone may reuse, and it remains the only pipeline whose transcripts are exact rather than transcribed.
+
+`hongloumeng-daiyu` read a 504-character excerpt of the third chapter of 红楼梦 — 林黛玉 meeting 贾宝玉 for the first time — from the Project Gutenberg transcription of the 1791 novel. The text is public domain; the narration was generated for Aside with `gpt-4o-mini-tts`/`coral` and is not a human reading. Two caveats are worth keeping in view: the Gutenberg transcription mixes simplified and traditional characters and had three missing glyphs, so the excerpt in `content/texts/` is a hand-normalised transcription rather than a copy, and rare characters (罥, 靥, 颦) may be mispronounced by the voice.
 
 ## Language
 
@@ -94,6 +125,11 @@ Published excerpt SHA-256:
 - `chronoscope-moses`: `ae95ae092826d563d06c3e38aedbf017b883577bbf449cbda038673b5f20759b`
 - `chronoscope-byrd`: `08d5ef5a3a601370ffc66ac1c6f52f9349f52c49bdfce39088c066c4fc7b2bd9`
 
+`luxun-madmans-diary`: source `a75982430e1776b9ed35ff53e7686cfd66a9466976d22ab8b88de93deb8b4a65`, excerpt `7f48f66f5fa099f3d0514911bfa19ce4d479759efdee00a1aab156187f470c2c`.
+`luxun-ah-q`: source `ade6823974da4e601d196d92c4ad911a290d059616560219a991abd1c922789b`, excerpt `ea5d46caaed3ebbb4de771567208d0320dd91fe2e3d4d16390c279fe1081d744`.
+
+The withdrawn `hongloumeng-daiyu` had no source audio to pin: its excerpt hash was `41deb78e9be6cb88b03c73039525e20a4983493147226c48bb194b02bc360fd8`.
+
 Audio-model review reported `musicAudible: false` for all six. It described every cut as clean except `chronoscope-byrd`, whose opening it called "slightly abrupt" — the excerpt starts on the host's question "and Admiral Byrd, you've been to both the North Pole and the South Pole", which is a turn boundary but not a paragraph opening. That is automated acoustic review, not human listening acceptance.
 
 ## Retired library
@@ -126,7 +162,8 @@ npx wrangler d1 execute asidefm --remote --config wrangler.production.jsonc --fi
 
 # 2. Upload the excerpts.
 for id in jfk-rice-moon reagan-brandenburg-gate chronoscope-kennedy \
-          chronoscope-warren chronoscope-moses chronoscope-byrd; do
+          chronoscope-warren chronoscope-moses chronoscope-byrd \
+          luxun-madmans-diary luxun-ah-q; do
   npx wrangler r2 object put "asidefm-audio/episodes/$id/original" \
     --file=".wrangler/public-samples/$id.mp3" --content-type audio/mpeg \
     --remote --config wrangler.production.jsonc
@@ -134,10 +171,11 @@ done
 
 # 3. Import metadata, transcripts and resume anchors.
 for id in jfk-rice-moon reagan-brandenburg-gate chronoscope-kennedy \
-          chronoscope-warren chronoscope-moses chronoscope-byrd; do
+          chronoscope-warren chronoscope-moses chronoscope-byrd \
+          luxun-madmans-diary luxun-ah-q; do
   npx wrangler d1 execute asidefm --remote --config wrangler.production.jsonc \
     --file=".wrangler/public-samples/$id.sql"
 done
 ```
 
-Verify `GET https://asidefm.com/api/episodes` returns exactly the six entries with `ready` status, that `GET https://asidefm.com/api/episodes/<retired-id>/audio` returns 404 for each of the nine retired ids, that each excerpt's full-file SHA-256 matches the table above, and that `Range: bytes=0-1023` returns 206. `tests/browser/public-samples.spec.ts` covers the player, transcript and download links for all six, but it needs an environment that serves them.
+Verify `GET https://asidefm.com/api/episodes` returns exactly the eight entries with `ready` status, that `GET https://asidefm.com/api/episodes/<retired-id>/audio` returns 404 for each of the nine retired ids, that each excerpt's full-file SHA-256 matches the table above, and that `Range: bytes=0-1023` returns 206. `tests/browser/public-samples.spec.ts` covers the player, transcript and download links for all six, but it needs an environment that serves them.

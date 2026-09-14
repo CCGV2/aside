@@ -11,8 +11,9 @@ test("English samples show attribution, timed transcripts, and playable audio", 
     };
   });
   await page.goto("/");
-  // The published set is exactly the six current samples, so a retired entry
-  // reappearing in the rail fails here rather than silently shipping.
+  // The English page publishes the six English recordings: the Chinese sample
+  // declares languageVisibility ["zh-cn"] and is filtered out. A broken filter
+  // shows seven, and a retired entry reappearing also fails here.
   await expect(page.locator(".sample-collection .sample-panel")).toHaveCount(6);
   await expect(page.locator(".sample-collection")).toContainText(
     "We Choose to Go to the Moon",

@@ -174,3 +174,32 @@ npm run db:cloudflare:production
 发布与核对：Worker 版本 `1755c3d1-93ea-4cbf-8412-d9977bd0963b`（`--containers-rollout=none`）。已发布的 6 条 episode 元数据生成于 `languageVisibility` 存在之前，因此先按新 spec 重跑一次 `prepare`（全部命中缓存、无付费调用，六条节选 SHA-256 与线上一致），再重新导入 6 份 seed（各 changes 4 / rows_written 5）。线上 `/api/episodes` 返回 6 条且均 `ready`、均带 `languageVisibility: ["en","zh-cn"]`；抽查两条节选 SHA-256 与本地一致；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200；浏览器实测中文页列出全部 6 条。`npm run check` 与 90 项测试通过（新增 21 项：语言/可见性 9、spec 校验 7、断句 5）。
 
 未验证：`tests/browser/public-samples.spec.ts` 仍因本地 `.data` 没有公开样本数据而未执行；英文页没有单独在浏览器里核对过（数据层已确认两页可见集相同）。
+
+## 中文公开库：合成语音管线与《红楼梦》样本
+
+2026-09-14：公开库加入第一条中文内容 `hongloumeng-daiyu`（宝黛初见，2:30），并为此新增一条**文本合成**的准备路径。
+
+背景是实测结论：LibriVox 的中文库只有 25 条，且没有红楼梦/三国/水浒/西游；archive.org 上能搜到的【有声書】紅樓夢、三國演義、甄嬛传等条目**全部没有 license 字段**，是商业有声书的未授权上传——文本公有领域不等于录音公有领域。所以古典小说这条线只能自己生成。另外实测 Whisper 的中文表现：白话文（鲁迅）可用但每 2–4 段有字级错误，文言文（聊齋）完全不可用，这也让"逐字稿来自文本而非转录"的合成路径更有价值。
+
+新增：`content/tts-samples.json` + `content/texts/*.txt`（一句一行）+ `scripts/prepare-tts-samples.ts`。逐句合成、逐句 ffprobe 计时、再拼接，所以**逐字稿的时间戳就是实际语音边界**，每句一个 passage 和一个续播锚点；不作转录、不作音频模型复核，分析标记为 `source: "synthesis"`（`engine/src/core.ts` 的联合类型相应扩展）。合成按句缓存于 `.wrangler/tts-cache/`，重跑不产生新调用。同时把 D1 seed 的生成抽成 `scripts/seed-sql.ts`，两条准备路径共用，重构后对同一份 episode 产生的 SQL 逐字节一致（仅 `analysis.version` 随机 UUID 与 `createdAt` 时间戳按设计变化）。
+
+样本用 `gpt-4o-mini-tts`/`coral` 朗读 1791 年《红楼梦》第三回林黛玉初见贾宝玉的 504 字节选，底本取自 Project Gutenberg #24264。Gutenberg 的转写简繁混用、并有三个缺字，因此 `content/texts/` 里是手工规范化过的转写而非直接复制——这一点，以及罥/靥/颦 等生僻字可能被误读，都已写进文档。署名上刻意写明是合成语音：`publisher: "Aside · 合成语音朗读"`、license 文本说明"not a human recording"、stage 为"合成语音 · 按句对齐"。
+
+线上核对：`/api/episodes` 返回 7 条，`hongloumeng-daiyu` 为 `zh` + `languageVisibility: ["zh-cn"]`，其余 6 条为 `en` + `["en","zh-cn"]`；新样本 `source: "synthesis"`、17 passages / 17 anchors、voice feminine；完整下载 SHA-256 与本地一致、`Range` 返回 206。浏览器实测中文页按语言排序把「宝黛初见」排在第一，其余 6 条英文内容的卡片带「英文」标记——这是 `languageVisibility` 与语言标记第一次在线上生效。`npm run check` 与 92 项测试通过（新增 2 项 TTS spec 校验）。
+
+未验证：英文页没有在浏览器里打开核对（按数据推断 `hongloumeng-daiyu` 的 `languageVisibility` 不含 `en`，应被过滤掉，但未实测）；`tests/browser/public-samples.spec.ts` 的条目数断言仍是 6，未随本次更新，且本地 `.data` 无公开样本数据、无法执行。合成语音的实际听感（音色是否合适、多音字是否读对）没有人工听过。
+
+## 中文公开库换成鲁迅：LibriVox 真人朗读
+
+2026-09-14：把上一轮的合成样本 `hongloumeng-daiyu` 下架（R2 对象 + D1 四张表的行），换成两条 LibriVox 真人朗读的鲁迅：`luxun-madmans-diary`（狂人日记，3:45）与 `luxun-ah-q`（阿Q正传第一章，4:10）。合成管线保留在仓库里（`content/tts-samples.json` 置空，代码与文档不动），但不再发布内容——放在真人录音旁边显得机械。
+
+选材结论：把"真人朗读 + 现代中文小说 + 我们能用"三个条件叠起来，**只剩鲁迅**。美国口径是发表年 + 95 年，2026 年刚放开到 1930 年及以前，所以鲁迅 1923《呐喊》/1926《徬徨》等全部已进入公有领域，而 1930 年之后的中文小说（老舍、张爱玲、金庸、以及全部当代文学）都还在版权内。实测也确认没有别的路：archive.org 上排除 LibriVox 后搜 `有聲書/有声书/朗读` 为 0 条；全站 `language:(zho)` + Creative Commons 的中文音频只有 35 条且几乎全是 LibriVox；此前搜到的红楼梦/三国/水浒/甄嬛传条目全部没有 license 字段，是商业有声书盗版。
+
+过程中修掉两个真实问题：
+
+1. **Whisper 对中文有时完全不输出标点**。《阿Q正传》第一次转录 1585 字里一个 `。` 都没有，这会让续播锚点退回 25 秒硬切、逐字稿也没法读。新增 `transcriptionPrompt` 字段（`backend/src/audio-provider.ts` 的 `transcribeAudio` 增加可选 prompt，经 spec 传入），用一段带标点的中文示例引导——同一段音频重转后出现 35 个 `。`。两条鲁迅 spec 都设了。
+2. **呐喊的分段不是想当然的**。`calltoarms_01` 是《自叙》而非《狂人日记》；逐段探测开头才发现 02 才是狂人日记、03 是孔乙己、04 是药。节选窗口因此从 01:15（文言小序之后的白话正文起点）开始。
+
+线上核对：`/api/episodes` 返回 8 条；两个新条目为 `zh` + `languageVisibility: ["zh-cn"]`，`source: "provider"`，voice masculine，狂人日记 26 passages/26 anchors、阿Q正传 54 passages/26 anchors（锚点按句切分，说明标点修复生效）；完整下载 SHA-256 与本地一致。浏览器实测中文页把「阿Q正传」「狂人日记」排在最前，其余 6 条英文内容带「英文」标记，红楼梦已从列表消失。`npm run check` 与 92 项测试通过。
+
+未验证：`tests/browser/public-samples.spec.ts` 的条目数断言仍是 6（英文页确实 6 条，两个中文样本 visibility 为 `["zh-cn"]` 会被过滤），但本地 `.data` 无公开样本数据、仍未执行；鲁迅两条的实际听感没有人工听过；逐字稿仍有该读者/素材固有的字级错误（如"须十分小心"→"需十分小心"、"古久先生"→"古九先生"）。
