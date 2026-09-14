@@ -33,6 +33,16 @@ test("email sign-in opens an editable profile and sign-out returns to guest", as
         },
       });
     if (path === "/api/episodes") return send([]);
+    if (path === "/api/space/episodes")
+      return send({
+        episodes: [],
+        pending: [],
+        usedToday: 0,
+        dailyLimit: 5,
+        usedStorage: 0,
+        storageLimit: 20 * 1024 ** 3,
+        nextCursor: null,
+      });
     if (path === "/api/auth/session")
       return send({ user, emailEnabled: true, googleEnabled: true });
     if (path === "/api/auth/email/start") return send({ ok: true });
@@ -69,6 +79,18 @@ test("email sign-in opens an editable profile and sign-out returns to guest", as
   await page.getByLabel("介绍").fill("I listen to history podcasts.");
   await page.getByRole("button", { name: "保存资料" }).click();
   await expect(page.getByRole("link", { name: "我的空间" })).toBeVisible();
+  const enterSpace = page.getByRole("link", {
+    name: "Enter My Space",
+    exact: true,
+  });
+  await expect(enterSpace).toHaveAttribute("href", "/space");
+  await page.reload();
+  await expect(enterSpace).toBeVisible();
+  await expect(page.getByRole("button", { name: "登录 / 注册" })).toHaveCount(
+    0,
+  );
+  await enterSpace.click();
+  await expect(page).toHaveURL(/\/space$/);
   await expect(
     page.getByRole("button", { name: "编辑个人资料" }),
   ).toContainText("History listener");
@@ -77,6 +99,7 @@ test("email sign-in opens an editable profile and sign-out returns to guest", as
     "I listen to history podcasts.",
   );
   await page.getByRole("button", { name: "退出登录" }).click();
+  await page.goto("/");
   await expect(page.getByRole("button", { name: "登录 / 注册" })).toBeVisible();
   await expect(page.getByRole("link", { name: "我的空间" })).toHaveCount(0);
 });

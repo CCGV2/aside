@@ -133,6 +133,7 @@
 }
 .hero-actions .account-trigger {
   border: 1px solid var(--line-strong);
+  text-decoration: none;
   border-radius: 12px;
   padding: 13px 18px;
   font-size: 14px;

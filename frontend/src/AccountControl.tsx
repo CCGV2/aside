@@ -34,9 +34,11 @@ const json = (body: unknown): RequestInit => ({
 export function AccountControl({
   onAuthChanged,
   onUserChanged,
+  enterSpace = false,
 }: {
   onAuthChanged: () => Promise<void>;
   onUserChanged?: (user: User | null) => void;
+  enterSpace?: boolean;
 }) {
   const [session, setSession] = useState<Session>();
   const [sessionFailed, setSessionFailed] = useState(false);
@@ -174,37 +176,43 @@ export function AccountControl({
   }
   return (
     <>
-      <button
-        className="account-trigger"
-        onClick={() => {
-          setError("");
-          setView(user ? "profile" : "login");
-        }}
-        aria-label={user ? t("编辑个人资料") : t("登录 / 注册")}
-      >
-        {user ? (
-          <>
-            <span className="account-avatar-small">
-              {user.avatarUrl ? (
-                <img
-                  src={
-                    user.avatarUrl +
-                    (user.avatarUrl.startsWith("/api/")
-                      ? `?v=${avatarVersion}`
-                      : "")
-                  }
-                  alt=""
-                />
-              ) : (
-                user.alias.slice(0, 1).toUpperCase()
-              )}
-            </span>
-            <span>{user.alias}</span>
-          </>
-        ) : (
-          t("登录 / 注册")
-        )}
-      </button>
+      {user && enterSpace ? (
+        <a className="account-trigger" href="/space">
+          Enter My Space
+        </a>
+      ) : (
+        <button
+          className="account-trigger"
+          onClick={() => {
+            setError("");
+            setView(user ? "profile" : "login");
+          }}
+          aria-label={user ? t("编辑个人资料") : t("登录 / 注册")}
+        >
+          {user ? (
+            <>
+              <span className="account-avatar-small">
+                {user.avatarUrl ? (
+                  <img
+                    src={
+                      user.avatarUrl +
+                      (user.avatarUrl.startsWith("/api/")
+                        ? `?v=${avatarVersion}`
+                        : "")
+                    }
+                    alt=""
+                  />
+                ) : (
+                  user.alias.slice(0, 1).toUpperCase()
+                )}
+              </span>
+              <span>{user.alias}</span>
+            </>
+          ) : (
+            t("登录 / 注册")
+          )}
+        </button>
+      )}
       {view !== "closed" &&
         createPortal(
           <div

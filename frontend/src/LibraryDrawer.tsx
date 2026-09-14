@@ -54,12 +54,16 @@ export function LibraryDrawer({
   onOpen,
   children,
   footer,
+  collection,
+  publicHref = "/",
 }: {
   items: AudioLibraryItem[];
   label: string;
   onOpen: (id: string) => void;
   children?: ReactNode;
   footer?: ReactNode;
+  collection?: "public" | "personal";
+  publicHref?: string;
 }) {
   const sidebar = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(256);
@@ -103,6 +107,22 @@ export function LibraryDrawer({
   }
   const content = (
     <>
+      {collection && (
+        <nav className="library-collections" aria-label={t("音频库")}>
+          <a
+            href={publicHref}
+            aria-current={collection === "public" ? "page" : undefined}
+          >
+            {t("公共音频")}
+          </a>
+          <a
+            href="/space"
+            aria-current={collection === "personal" ? "page" : undefined}
+          >
+            {t("我的音频")}
+          </a>
+        </nav>
+      )}
       {children}
       <ul className="audio-library-list">
         {items.map((item) => (
@@ -145,7 +165,25 @@ export function LibraryDrawer({
               />
             )}
             {item.actions && (
-              <div className="audio-library-actions">{item.actions}</div>
+              <details
+                className="audio-library-menu"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget))
+                    event.currentTarget.open = false;
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    event.currentTarget.open = false;
+                    event.currentTarget.querySelector("summary")?.focus();
+                  }
+                }}
+              >
+                <summary aria-label={`${t("音频操作")} ${item.title}`}>
+                  ⋯
+                </summary>
+                <div className="audio-library-actions">{item.actions}</div>
+              </details>
             )}
           </li>
         ))}
@@ -256,7 +294,7 @@ export function LibraryDrawer({
           if (event.key !== "Tab") return;
           const controls = Array.from(
             event.currentTarget.querySelectorAll<HTMLElement>(
-              'button:not(:disabled), a[href], input:not(:disabled):not([type="file"]), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+              'button:not(:disabled), a[href], summary, input:not(:disabled):not([type="file"]), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
             ),
           ).filter(
             (element) =>

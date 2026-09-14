@@ -52,6 +52,9 @@ function App() {
   if (location.pathname === "/space")
     return (
       <Space
+        publicHref={
+          episodes[0] ? `/?episode=${encodeURIComponent(episodes[0].id)}` : "/"
+        }
         accountControl={<AccountControl onAuthChanged={accountUpdated} />}
         accountVersion={accountVersion}
         activeEpisodeId={episode?.id}
@@ -86,7 +89,9 @@ function App() {
         loading={episodesLoading}
         error={message(error)}
         spaceLink={!!accountUser}
-        accountControl={<AccountControl onAuthChanged={accountUpdated} />}
+        accountControl={
+          <AccountControl onAuthChanged={accountUpdated} enterSpace />
+        }
         open={(id) => void enter(id).catch((error) => setError(error.message))}
       />
     );
@@ -108,18 +113,13 @@ function App() {
               />
             </a>
             <LibraryDrawer
+              collection="public"
               items={episodes.map(audioCard)}
               label={t("公共音频库")}
               onOpen={(id) =>
                 void playEpisode(id).catch((error) => setError(error.message))
               }
-            >
-              {accountUser && (
-                <a className="player-space-link" href="/space">
-                  {t("我的空间")}
-                </a>
-              )}
-            </LibraryDrawer>
+            />
           </>
         }
       />

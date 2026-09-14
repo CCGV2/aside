@@ -400,3 +400,125 @@
     display: inline;
   }
 }
+
+.library-collections {
+  display: flex;
+  gap: 4px;
+  padding: 0 0 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.library-collections a {
+  flex: 1;
+  text-align: center;
+  padding: 9px 4px;
+  border-radius: 6px;
+  color: var(--ink-3);
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.library-collections a[aria-current="page"] {
+  background: var(--fill-strong);
+  color: var(--ink);
+}
+.library-collections a:hover {
+  color: var(--ink);
+  background: var(--fill);
+}
+.audio-library-item {
+  position: relative;
+}
+.audio-library-item:has(.audio-library-menu) .audio-library-select {
+  padding-right: 40px;
+}
+.audio-library-menu {
+  margin: 0;
+  position: absolute;
+  top: 5px;
+  right: 2px;
+  z-index: 1;
+}
+.audio-library-menu[open] {
+  z-index: 3;
+}
+.audio-library-menu summary {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-3);
+  border-radius: 6px;
+  font-size: 20px;
+}
+.audio-library-menu summary::-webkit-details-marker,
+.space-upload-options summary::-webkit-details-marker {
+  display: none;
+}
+.audio-library-menu summary:hover,
+.audio-library-menu[open] summary {
+  color: var(--ink);
+  background: var(--fill);
+}
+.audio-library-menu .audio-library-actions {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 112px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px #0002;
+}
+.audio-library-menu .audio-library-actions button {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+  white-space: nowrap;
+}
+summary:focus-visible {
+  outline: 2px solid var(--olive);
+  outline-offset: 2px;
+}
+.space-upload-options {
+  margin: 0 0 12px;
+  letter-spacing: 0;
+}
+.space-upload-options > summary {
+  list-style: none;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.space-upload-options > summary:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+.space-upload-options[open] {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.space-upload-options .space-sidebar-limit {
+  padding-inline: 10px;
+}
+.space-stage-empty p + p {
+  margin-top: 12px;
+  line-height: 1.7;
+}
+.space-explore {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 10px 16px;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: none;
+  border-radius: 8px;
+  background: var(--fill);
+}

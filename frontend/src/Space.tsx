@@ -52,12 +52,14 @@ export function Space({
   onOpen,
   activeEpisodeId,
   player,
+  publicHref,
 }: {
   accountControl: ReactNode;
   accountVersion: number;
   onOpen: (id: string, userInitiated?: boolean) => void;
   activeEpisodeId?: string;
   player?: (navigation: ReactNode) => ReactNode;
+  publicHref: string;
 }) {
   const [user, setUser] = useState<SpaceUser | null>();
   const [page, setPage] = useState<SpacePage>();
@@ -237,6 +239,8 @@ export function Space({
       </a>
       {user && (
         <LibraryDrawer
+          collection="personal"
+          publicHref={publicHref}
           label={t("我的音频")}
           onOpen={onOpen}
           items={[
@@ -303,47 +307,50 @@ export function Space({
             </>
           }
         >
-          <button
-            type="button"
-            className="space-sidebar-upload"
-            disabled={
-              !uploadEnabled ||
-              !page ||
-              checking ||
-              progress !== null ||
-              page.usedToday >= page.dailyLimit ||
-              page.usedStorage >= page.storageLimit
-            }
-            onClick={() => input.current?.click()}
-            aria-describedby="space-upload-limit"
-          >
-            ＋ {t("上传音频")}
-          </button>
-          <input
-            ref={input}
-            type="file"
-            accept="audio/*,.mp4"
-            aria-label={t("选择音频")}
-            className="space-sidebar-file"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              void choose(file);
-            }}
-          />
-          <p id="space-upload-limit" className="space-sidebar-limit">
-            {page
-              ? `${page.usedToday} / ${page.dailyLimit} ${t("篇今日已用")}`
-              : t("正在加载…")}
-            <span>
-              {t("单个音频最长 5 小时 · 文件最大 1 GiB · 每天最多 5 篇")}
-            </span>
-          </p>
-          {!uploadEnabled && (
-            <p className="space-sidebar-note">
-              {t("上传暂未开放，已保存的音频仍可收听。")}
+          <details className="space-upload-options">
+            <summary>＋ {t("上传音频")}</summary>
+            <button
+              type="button"
+              className="space-sidebar-upload"
+              disabled={
+                !uploadEnabled ||
+                !page ||
+                checking ||
+                progress !== null ||
+                page.usedToday >= page.dailyLimit ||
+                page.usedStorage >= page.storageLimit
+              }
+              onClick={() => input.current?.click()}
+              aria-describedby="space-upload-limit"
+            >
+              {t("选择音频")}
+            </button>
+            <input
+              ref={input}
+              type="file"
+              accept="audio/*,.mp4"
+              aria-label={t("选择音频")}
+              className="space-sidebar-file"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                void choose(file);
+              }}
+            />
+            <p id="space-upload-limit" className="space-sidebar-limit">
+              {page
+                ? `${page.usedToday} / ${page.dailyLimit} ${t("篇今日已用")}`
+                : t("正在加载…")}
+              <span>
+                {t("单个音频最长 5 小时 · 文件最大 1 GiB · 每天最多 5 篇")}
+              </span>
             </p>
-          )}
+            {!uploadEnabled && (
+              <p className="space-sidebar-note">
+                {t("上传暂未开放，已保存的音频仍可收听。")}
+              </p>
+            )}
+          </details>
           {(checking || progress !== null) && (
             <div className="space-upload-activity" role="status">
               <strong>{uploadName}</strong>
@@ -424,7 +431,11 @@ export function Space({
           ) : (
             <section className="space-stage-empty">
               <h1>{t("我的空间")}</h1>
-              <p>{t("打开音频库，选择一段开始收听")}</p>
+              <p>{t("你的音频，你可以加入的对话。")}</p>
+              <p>{t("从音频库上传一段，或先探索公共音频。")}</p>
+              <a className="space-explore" href={publicHref}>
+                {t("探索公共音频")}
+              </a>
             </section>
           )}
         </main>
