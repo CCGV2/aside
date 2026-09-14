@@ -164,3 +164,13 @@ npm run db:cloudflare:production
 线上核对：`/api/episodes` 返回 6 条且均 `ready`；四条新节选完整下载后的 SHA-256 与本地一致；`Range: bytes=0-1023` 返回 206；逐字稿与续播锚点分别为 71/12、69/10、68/11、64/9 条，末段文字确认不含广告。9 个已下架旧内容的 id 仍全部 404。`npm run check` 与 69 项项目测试通过；`tests/browser/public-samples.spec.ts` 的条目数断言已从 2 更新为 6，但本地 `.data` 无公开样本数据，仍未执行。
 
 1940–80 年代转录质量明显低于此前的播客素材：肯尼迪那条把 "Senator Lodge" 听成 "senator large"/"senator lange"，四集都把 "Longines" 听成 "launching"/"long gene"。逐字稿按音频生成、不做人工修正，重跑会复现同样错误，已记入文档。
+
+## 公开库按语言页面发布
+
+2026-09-14：前端上线语言感知的公开库。`attribution` 现在有两个语言字段：`language` 是录音本身的语言，`languageVisibility` 是它登在哪些语言页面上。`libraryFor` 按前者排序、按后者筛选，排在后面的其他语言条目带一个语言标记。**没有 `languageVisibility` 的录音只参与排序、永远不被隐藏**——这个字段是给策展的公开库用的，用户自己上传的节目不能因此从自己的播放器里消失。六条现有内容全部标为 `["en","zh-cn"]`，中英文页面都展示。
+
+准备侧一并整理：`scripts/sample-spec.ts` 接管 spec 校验（只允许 https 且 host 限于 `archive.org` 与 `catalog.archives.gov`；`title`/`publisher`/`author`/`sourceUrl`/`license`/`licenseUrl`/`summary`/`sourceSha256` 全部必填），VOA 的兜底署名已删除，缺字段就直接失败而不是按默认来源发布；`scripts/sentence-groups.ts` 让续播锚点的断句同时识别全角 `。！？…`，此前中文逐字稿只能按 25 秒上限硬切。
+
+发布与核对：Worker 版本 `1755c3d1-93ea-4cbf-8412-d9977bd0963b`（`--containers-rollout=none`）。已发布的 6 条 episode 元数据生成于 `languageVisibility` 存在之前，因此先按新 spec 重跑一次 `prepare`（全部命中缓存、无付费调用，六条节选 SHA-256 与线上一致），再重新导入 6 份 seed（各 changes 4 / rows_written 5）。线上 `/api/episodes` 返回 6 条且均 `ready`、均带 `languageVisibility: ["en","zh-cn"]`；抽查两条节选 SHA-256 与本地一致；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200；浏览器实测中文页列出全部 6 条。`npm run check` 与 90 项测试通过（新增 21 项：语言/可见性 9、spec 校验 7、断句 5）。
+
+未验证：`tests/browser/public-samples.spec.ts` 仍因本地 `.data` 没有公开样本数据而未执行；英文页没有单独在浏览器里核对过（数据层已确认两页可见集相同）。
