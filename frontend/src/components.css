@@ -1,0 +1,477 @@
+/* Shared controls: one pill button family, glass menus, a sliding segmented control and fields. */
+:root {
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 20px;
+  --r-full: 999px;
+  --h-lg: 44px;
+  --h-md: 36px;
+  --h-sm: 28px;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--h-md);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.3, 0.7, 0.4, 1),
+    box-shadow 200ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    filter 160ms ease;
+}
+.btn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.btn-lg {
+  height: var(--h-lg);
+  padding: 0 22px;
+  font-size: 15px;
+}
+.btn-sm {
+  height: var(--h-sm);
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 12px;
+}
+.btn-sm svg {
+  width: 12px;
+  height: 12px;
+}
+.btn-block {
+  width: 100%;
+}
+.btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--olive);
+  outline-offset: 3px;
+}
+.btn-primary {
+  color: var(--on-primary);
+  background: linear-gradient(180deg, var(--primary-top), var(--primary-bottom));
+  box-shadow:
+    inset 0 1px 0 #ffffff38,
+    inset 0 -1px 0 #0000002e,
+    0 0 0 1px var(--primary-ring),
+    0 6px 16px -6px var(--primary-glow);
+}
+.btn-primary:not(:disabled):hover {
+  background: linear-gradient(180deg, var(--primary-top), var(--primary-bottom));
+  filter: brightness(1.07);
+  box-shadow:
+    inset 0 1px 0 #ffffff45,
+    inset 0 -1px 0 #0000002e,
+    0 0 0 1px var(--primary-ring),
+    0 10px 26px -8px var(--primary-glow);
+}
+.btn-primary:not(:disabled):active {
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px #00000033,
+    0 0 0 1px var(--primary-ring),
+    0 3px 8px -4px var(--primary-glow);
+}
+.btn-lead {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: -12px;
+  border-radius: 50%;
+  background: #ffffff26;
+  box-shadow: inset 0 1px 0 #ffffff33;
+}
+.btn .btn-lead svg {
+  width: 11px;
+  height: 11px;
+  margin-left: 1px;
+}
+.btn-secondary {
+  background: var(--raised);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line-strong),
+    var(--raise);
+}
+.btn-secondary:not(:disabled):hover {
+  background: var(--raised);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--ink-3),
+    var(--raise-hover);
+}
+.btn-secondary:not(:disabled):active {
+  background: var(--fill);
+  box-shadow:
+    inset 0 1px 2px var(--inset),
+    0 0 0 1px var(--line-strong);
+}
+.btn-quiet {
+  color: var(--ink-2);
+}
+.btn-quiet:not(:disabled):hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+.btn-quiet:not(:disabled):active {
+  background: var(--fill-strong);
+  color: var(--ink);
+}
+/* The one glowing control: anything that starts a voice conversation. */
+.btn-voice {
+  color: var(--ink);
+  background:
+    linear-gradient(var(--raised), var(--raised)) padding-box,
+    var(--ring-grad) border-box;
+  border: 1.5px solid transparent;
+  box-shadow:
+    0 4px 14px -6px var(--glow-sage),
+    0 6px 18px -10px var(--glow-amber);
+}
+.btn-voice:not(:disabled):hover {
+  background:
+    linear-gradient(var(--raised), var(--raised)) padding-box,
+    var(--ring-grad) border-box;
+  box-shadow:
+    0 0 0 4px var(--glow-sage),
+    0 8px 22px -8px var(--glow-amber);
+}
+.btn-voice.is-live {
+  animation: voice-halo 1.8s ease-in-out infinite;
+}
+@keyframes voice-halo {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px var(--glow-sage),
+      0 6px 18px -8px var(--glow-amber);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px transparent,
+      0 10px 26px -8px var(--glow-amber);
+  }
+}
+.btn-neutral {
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line),
+    var(--raise);
+}
+.btn-neutral:not(:disabled):hover {
+  background: var(--raised);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line-strong),
+    var(--raise-hover);
+}
+.btn-icon {
+  padding: 0;
+  width: var(--h-md);
+}
+.btn-icon.btn-lg {
+  width: var(--h-lg);
+}
+.btn-icon.btn-sm {
+  width: var(--h-sm);
+}
+.btn-icon.btn-lg svg {
+  width: 16px;
+  height: 16px;
+}
+/* Disabled keeps the shape and goes flat and neutral. */
+.btn:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  color: var(--ink-3);
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-color: transparent;
+  filter: none;
+  animation: none;
+}
+.btn-quiet:disabled {
+  background: transparent;
+  box-shadow: none;
+}
+.eq {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+.eq i {
+  width: 2px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--olive);
+  animation: eq-bounce 780ms ease-in-out infinite alternate;
+}
+.eq i:nth-child(2) {
+  animation-delay: -260ms;
+}
+.eq i:nth-child(3) {
+  animation-delay: -520ms;
+}
+.eq i:nth-child(4) {
+  animation-delay: -130ms;
+}
+@keyframes eq-bounce {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* ---------- Menus ---------- */
+.menu {
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  min-width: max(100%, 180px);
+  max-width: 280px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 14px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line),
+    var(--menu-shadow);
+  transform-origin: top right;
+  animation: menu-in 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .menu {
+    background: var(--panel);
+  }
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+.menu-label {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.menu-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  min-height: var(--h-md);
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+.menu-option:hover,
+.menu-option:focus-visible {
+  background: var(--fill);
+  color: var(--ink);
+}
+.menu-option[aria-selected="true"] {
+  color: var(--ink);
+}
+.menu-option-text {
+  display: grid;
+  gap: 2px;
+}
+.menu-option-text b {
+  font-weight: 500;
+}
+.menu-option-text small {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.menu-check {
+  width: 14px;
+  height: 14px;
+  color: var(--olive);
+  visibility: hidden;
+}
+.menu-option[aria-selected="true"] .menu-check {
+  visibility: visible;
+}
+
+/* ---------- Segmented control ---------- */
+.seg {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--r-full);
+  background: var(--fill);
+  box-shadow: inset 0 1px 2px var(--inset);
+}
+.seg-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 0;
+  border-radius: var(--r-full);
+  background: var(--seg-on);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line),
+    var(--raise);
+  opacity: 0;
+  transition:
+    translate 340ms cubic-bezier(0.3, 0.8, 0.25, 1),
+    width 340ms cubic-bezier(0.3, 0.8, 0.25, 1),
+    opacity 200ms ease;
+}
+.seg.ready .seg-thumb {
+  opacity: 1;
+}
+.seg-option {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: var(--h-sm);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 200ms ease;
+}
+.seg-option:hover {
+  background: transparent;
+  color: var(--ink);
+}
+.seg-option[aria-current="page"],
+.seg-option[aria-pressed="true"],
+.seg-option[aria-checked="true"] {
+  color: var(--ink);
+}
+.seg:not(.ready) :is(.seg-option[aria-current="page"], .seg-option[aria-pressed="true"], .seg-option[aria-checked="true"]) {
+  background: var(--seg-on);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+/* ---------- Fields ---------- */
+.input {
+  width: 100%;
+  height: var(--h-lg);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.2;
+  box-shadow:
+    inset 0 1px 2px var(--inset),
+    0 0 0 1px var(--line-strong);
+  transition: box-shadow 180ms ease;
+}
+textarea.input {
+  height: auto;
+  min-height: 96px;
+  padding: 12px 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.input.has-icon {
+  padding-left: 40px;
+}
+.input::placeholder {
+  color: var(--ink-3);
+}
+.input:hover:not(:disabled) {
+  box-shadow:
+    inset 0 1px 2px var(--inset),
+    0 0 0 1px var(--ink-3);
+}
+.input:focus,
+.input:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1.5px var(--olive),
+    0 0 0 5px var(--focus-soft);
+}
+.input[aria-invalid="true"] {
+  box-shadow:
+    0 0 0 1.5px var(--danger),
+    0 0 0 5px color-mix(in srgb, var(--danger) 16%, transparent);
+}
+.input:disabled {
+  background: var(--fill);
+  color: var(--ink-3);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: not-allowed;
+}
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-icon {
+  position: absolute;
+  left: 14px;
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .seg-thumb,
+  .seg-option,
+  .input {
+    transition: none;
+  }
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+  .menu,
+  .btn-voice.is-live,
+  .eq i {
+    animation: none;
+  }
+}

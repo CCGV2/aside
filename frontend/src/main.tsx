@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { usePlayerController } from "./usePlayerController";
 import "./style.css";
+import "./components.css";
 function App() {
   const locale = useLocale();
   const player = usePlayerController();

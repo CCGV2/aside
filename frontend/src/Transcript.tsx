@@ -42,10 +42,10 @@ export function Transcript({
       <div className="panel-heading">
         <h2>{t("文字稿")}</h2>
         {following ? (
-          <span>{t("跟随播放")}</span>
+          <span className="transcript-following">{t("跟随播放")}</span>
         ) : (
           <button
-            className="transcript-follow"
+            className="transcript-follow btn btn-secondary btn-sm"
             onClick={() => setFollowing(true)}
           >
             {t("回到当前播放")}
@@ -99,7 +99,9 @@ export function Transcript({
                     onSeek(p.startMs);
                   }}
                 >
-                  ▶
+                  <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M4.5 2.8c0-.8.9-1.3 1.6-.9l7 4.5a1 1 0 0 1 0 1.8l-7 4.5c-.7.4-1.6-.1-1.6-.9z" />
+                  </svg>
                 </button>
               </span>
               <span>{p.text}</span>

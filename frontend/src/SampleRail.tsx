@@ -90,18 +90,40 @@ export function SampleRail({
       </ul>
       <div className="sample-rail-controls">
         <button
+          className="btn btn-neutral btn-icon btn-lg"
           disabled={edges.start}
           onClick={() => move(-1)}
           aria-label={t("上一组音频")}
         >
-          ←
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M13 8H3M7 4 3 8l4 4" />
+          </svg>
         </button>
         <button
+          className="btn btn-neutral btn-icon btn-lg"
           disabled={edges.end}
           onClick={() => move(1)}
           aria-label={t("下一组音频")}
         >
-          →
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 8h10M9 4l4 4-4 4" />
+          </svg>
         </button>
       </div>
     </div>

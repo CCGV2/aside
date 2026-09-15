@@ -60,11 +60,15 @@
   );
   transition:
     background-color 220ms ease,
-    border-color 220ms ease;
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    translate 260ms cubic-bezier(0.3, 0.7, 0.4, 1);
 }
 .sample-panel:is(:hover, :focus-visible) {
   background-color: var(--panel);
   border-color: var(--line-strong);
+  box-shadow: var(--raise-hover);
+  translate: 0 -2px;
 }
 .sample-panel-meta {
   display: flex;
@@ -87,13 +91,13 @@
   height: 76px;
   margin: 12px 0;
   overflow: hidden;
-  color: #8198b0;
+  color: var(--wave-a);
 }
 .sample-rail > li:nth-child(3n + 2) .sample-panel-wave {
-  color: #b59b89;
+  color: var(--wave-b);
 }
 .sample-rail > li:nth-child(3n) .sample-panel-wave {
-  color: #9797b1;
+  color: var(--olive);
 }
 .sample-panel-wave i {
   display: block;
@@ -132,37 +136,42 @@
   color: var(--ink-3);
   font-size: 11px;
 }
+/* A raised disc that turns into the primary play button when its card is hovered. */
 .sample-panel-play {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: var(--fill-strong);
-  color: var(--ink-2);
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line),
+    var(--raise);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease;
 }
 .sample-panel-play svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+}
+.sample-panel:is(:hover, :focus-visible) .sample-panel-play {
+  color: var(--on-primary);
+  background: linear-gradient(180deg, var(--primary-top), var(--primary-bottom));
+  box-shadow:
+    inset 0 1px 0 #ffffff38,
+    0 0 0 1px var(--primary-ring),
+    0 6px 16px -6px var(--primary-glow);
 }
 .sample-rail-controls {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
   margin-top: 14px;
-}
-.sample-rail-controls button {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 0;
-  background: var(--fill);
-  padding: 0;
-  font-size: 20px;
-}
-.sample-rail-controls button:disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 @media (max-width: 1000px) {
   .sample-rail {

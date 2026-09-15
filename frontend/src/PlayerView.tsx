@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -9,12 +10,30 @@ import {
 import { flushSync } from "react-dom";
 import { AccountControl, type User } from "./AccountControl";
 import { LanguageSelect } from "./LanguageSelect";
+import { SpeedSelect } from "./SpeedSelect";
 import { Transcript } from "./Transcript";
 import { message, resumeLabel, t } from "./i18n";
 import { names, type PlayerController } from "./usePlayerController";
 
 export const formatPlayerTime = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+
+// Decorative bars behind the seek slider; the same episode always draws the same shape.
+const WAVE_BARS = 64;
+function waveShape(seed: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++)
+    hash = Math.imul(hash ^ seed.charCodeAt(i), 16777619);
+  const phase = ((hash >>> 0) % 628) / 100;
+  return Array.from({ length: WAVE_BARS }, (_, i) => {
+    const shape =
+      Math.sin(i * 0.55 + phase) * 0.5 +
+      Math.sin(i * 0.19 + phase * 2) * 0.35 +
+      Math.sin(i * 1.7) * 0.15;
+    return 0.22 + 0.78 * Math.abs(shape);
+  });
+}
+const LIVE_STATUSES = ["connecting", "transcribing", "on"];
 
 export function PlayerView({
   player,
@@ -68,6 +87,7 @@ export function PlayerView({
   const [compactEpisode, setCompactEpisode] = useState("");
   const compact = !!episode && compactEpisode === episode.id;
   const panelId = useId();
+  const waveHeights = useMemo(() => waveShape(episode?.id ?? ""), [episode?.id]);
   const [mobileTab, setMobileTab] = useState<"transcript" | "chat" | null>(
     "transcript",
   );
@@ -181,7 +201,22 @@ export function PlayerView({
       {error && (
         <div role="alert" className="alert">
           {message(error)}
-          <button onClick={() => setError("")}>×</button>
+          <button
+            className="btn btn-quiet btn-icon btn-sm"
+            aria-label={t("关闭")}
+            onClick={() => setError("")}
+          >
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="m4 4 8 8M12 4l-8 8" />
+            </svg>
+          </button>
         </div>
       )}
       <section className={`player-card${compact ? " compact" : ""}`}>
@@ -215,6 +250,7 @@ export function PlayerView({
               <p>{message(episode.error ?? "")}</p>
               {["blocked", "failed"].includes(episode.status) && (
                 <button
+                  className="btn btn-secondary btn-sm"
                   onClick={() => void retry().catch((e) => setError(e.message))}
                 >
                   {t("重新分析")}
@@ -351,7 +387,7 @@ export function PlayerView({
               <h2>{t("聊两句")}</h2>
               {listeningMode === "off" && (
                 <button
-                  className="enable-microphone"
+                  className="enable-microphone btn btn-voice btn-sm"
                   disabled={enablingMic || !configured}
                   onClick={async () => {
                     setEnablingMic(true);
@@ -362,6 +398,17 @@ export function PlayerView({
                     }
                   }}
                 >
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="5.5" y="1.5" width="5" height="8" rx="2.5" />
+                    <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" />
+                  </svg>
                   {enablingMic ? t("开启麦克风…") : t("开启麦克风")}
                 </button>
               )}
@@ -479,7 +526,12 @@ export function PlayerView({
                         : t("可以追问，或继续听")}
                 </span>
                 {!resumeHeld && (
-                  <button onClick={holdResume}>{t("先别继续")}</button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={holdResume}
+                  >
+                    {t("先别继续")}
+                  </button>
                 )}
               </div>
             )}
@@ -522,6 +574,11 @@ export function PlayerView({
               </button>
             )}
             <form
+              className={
+                LIVE_STATUSES.includes(liveStatus)
+                  ? "composer is-listening"
+                  : "composer"
+              }
               onSubmit={(e) => {
                 e.preventDefault();
                 setMobileTab("chat");
@@ -535,10 +592,21 @@ export function PlayerView({
                 onChange={(e) => setQuestion(e.target.value)}
               />
               <button
+                className="btn btn-primary btn-icon"
                 disabled={!configured || !episode.analysis || !question.trim()}
                 aria-label={t("发送消息")}
               >
-                ↑
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M8 13V3M4 7l4-4 4 4" />
+                </svg>
               </button>
             </form>
             {sources.length > 0 && (
@@ -568,18 +636,28 @@ export function PlayerView({
           <span
             className={`dock-art${listeningActive ? " playing" : ""}`}
             aria-hidden="true"
-          >
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
+          />
           <strong>{episode.title}</strong>
         </div>
         <div className="dock-transport">
           <div className="dock-progress">
             <span>{formatPlayerTime(state.positionMs)}</span>
             <div className="timeline-wrap">
+              <span className="timeline-wave" aria-hidden="true">
+                {waveHeights.map((height, index) => (
+                  <i
+                    key={index}
+                    className={
+                      episode.durationMs > 0 &&
+                      (index + 0.5) / waveHeights.length <=
+                        state.positionMs / episode.durationMs
+                        ? "on"
+                        : undefined
+                    }
+                    style={{ height: `${Math.round(height * 100)}%` }}
+                  />
+                ))}
+              </span>
               <input
                 aria-label={t("播放进度")}
                 className="timeline"
@@ -614,7 +692,7 @@ export function PlayerView({
           </div>
           <div className="controls">
             <button
-              className={`play${listeningActive ? " playing" : ""}`}
+              className={`play btn btn-primary btn-icon${listeningActive ? " playing" : ""}`}
               aria-keyshortcuts="Space"
               title={t("播放 / 暂停（空格）")}
               aria-label={listeningActive ? t("暂停") : t("播放")}
@@ -659,22 +737,16 @@ export function PlayerView({
               )}
             </button>
             {state.interruption && (
-              <button className="resume" onClick={requestResume}>
+              <button
+                className="resume btn btn-secondary btn-sm"
+                onClick={requestResume}
+              >
                 {t("继续听 ↗")}
               </button>
             )}
           </div>
         </div>
-        <select
-          aria-label={t("播放速度")}
-          defaultValue="1"
-          onChange={(e) => setPlaybackRate(Number(e.target.value))}
-        >
-          <option value="0.75">0.75×</option>
-          <option value="1">1×</option>
-          <option value="1.25">1.25×</option>
-          <option value="1.5">1.5×</option>
-        </select>
+        <SpeedSelect onChange={setPlaybackRate} />
       </div>
       <button
         className="debug-toggle"

@@ -3,9 +3,27 @@ import type { AudioLibraryItem } from "./library-item";
 import { t } from "./i18n";
 import "./library-drawer.css";
 
+// Long titles rest on an ellipsis and only scroll while their row is hovered or focused.
 function LibraryTitle({ title, scroll }: { title: string; scroll: boolean }) {
   const viewport = useRef<HTMLElement>(null);
   const text = useRef<HTMLSpanElement>(null);
+  const [engaged, setEngaged] = useState(false);
+  useEffect(() => {
+    const row = viewport.current!.closest(".audio-library-select");
+    if (!row) return;
+    const on = () => setEngaged(true);
+    const off = () => setEngaged(false);
+    row.addEventListener("pointerenter", on);
+    row.addEventListener("pointerleave", off);
+    row.addEventListener("focus", on);
+    row.addEventListener("blur", off);
+    return () => {
+      row.removeEventListener("pointerenter", on);
+      row.removeEventListener("pointerleave", off);
+      row.removeEventListener("focus", on);
+      row.removeEventListener("blur", off);
+    };
+  }, []);
   useEffect(() => {
     const container = viewport.current!;
     const label = text.current!;
@@ -13,8 +31,10 @@ function LibraryTitle({ title, scroll }: { title: string; scroll: boolean }) {
     let animation: Animation | undefined;
     const update = () => {
       animation?.cancel();
-      const distance = label.scrollWidth - container.clientWidth;
-      if (!scroll || reduced.matches || distance <= 1) return;
+      container.classList.remove("is-scrolling");
+      const distance = container.scrollWidth - container.clientWidth;
+      if (!scroll || !engaged || reduced.matches || distance <= 1) return;
+      container.classList.add("is-scrolling");
       const travel = Math.max(1800, (distance / 28) * 1000);
       const duration = 1800 + travel + 1600;
       animation = label.animate(
@@ -37,10 +57,11 @@ function LibraryTitle({ title, scroll }: { title: string; scroll: boolean }) {
     update();
     return () => {
       animation?.cancel();
+      container.classList.remove("is-scrolling");
       observer.disconnect();
       reduced.removeEventListener("change", update);
     };
-  }, [title, scroll]);
+  }, [title, scroll, engaged]);
   return (
     <strong ref={viewport} className="library-title">
       <span ref={text}>{title}</span>
@@ -274,7 +295,7 @@ export function LibraryDrawer({
     <>
       <button
         ref={trigger}
-        className="library-trigger"
+        className="library-trigger btn btn-secondary"
         aria-haspopup="dialog"
         aria-expanded={opened}
         aria-controls={dialogId}
@@ -283,7 +304,17 @@ export function LibraryDrawer({
           setOpened(true);
         }}
       >
-        <span aria-hidden="true">☷</span> {t("音频库")}
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M3 4h10M3 8h10M3 12h6" />
+        </svg>
+        {t("音频库")}
       </button>
       <dialog
         ref={dialog}
@@ -321,8 +352,22 @@ export function LibraryDrawer({
         <div className="library-drawer-panel">
           <header className="library-drawer-header">
             <h2 id={titleId}>{label}</h2>
-            <button autoFocus onClick={close} aria-label={t("关闭音频库")}>
-              ×
+            <button
+              className="btn btn-quiet btn-icon"
+              autoFocus
+              onClick={close}
+              aria-label={t("关闭音频库")}
+            >
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="m4 4 8 8M12 4l-8 8" />
+              </svg>
             </button>
           </header>
           <div className="library-drawer-content">{content}</div>

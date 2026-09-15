@@ -163,6 +163,14 @@ test("desktop library resizes within half the viewport and scrolls overflowing t
   await handle.press("Home");
   await expect(sidebar).toHaveCSS("width", "220px");
   const titles = sidebar.locator(".library-title > span");
+  // Titles only scroll while their row is hovered, so hover one that overflows.
+  const overflowing = await sidebar
+    .locator(".library-title")
+    .evaluateAll((nodes) =>
+      nodes.findIndex((node) => node.scrollWidth > node.clientWidth + 1),
+    );
+  expect(overflowing).toBeGreaterThanOrEqual(0);
+  await sidebar.locator(".audio-library-select").nth(overflowing).hover();
   await expect
     .poll(() =>
       titles.evaluateAll((nodes) =>

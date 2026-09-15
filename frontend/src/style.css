@@ -6,51 +6,94 @@
     "PingFang SC",
     sans-serif;
   /* Design tokens: one value per role; rare illustration colors stay local. */
-  --brand-ink: #73777d;
-  --bg: #f7f6f3;
-  --surface: #efeeeb;
-  --panel: #fdfcf9;
-  --fill: #eeefef;
-  --fill-strong: #e2e4e5;
-  --highlight: #e5ebe6;
-  --line: #e0dfdc;
-  --line-strong: #bfc2c2;
-  --ink: #292c30;
-  --ink-2: #565b61;
-  --ink-3: #6d7278;
+  --brand-ink: #34503f;
+  --bg: #f6f1e8;
+  --surface: #efe8dc;
+  --panel: #fffbf4;
+  --fill: #efe9df;
+  --fill-strong: #e5ddd0;
+  --highlight: #e3e9df;
+  --line: #e6ddcf;
+  --line-strong: #c9bca9;
+  --ink: #2b2520;
+  --ink-2: #6a5f55;
+  --ink-3: #776b60;
   --accent: #334d3d;
   --accent-strong: #253f2d;
-  --olive: #5b7768;
+  --olive: #4f7260;
   --alert-bg: #f4e8de;
   --alert-ink: #875944;
   --danger: #a53831;
+  /* Controls: tactile surfaces, the primary gradient and the voice glow. */
+  --primary-top: #46654f;
+  --primary-bottom: #2f4a3a;
+  --primary-ring: #26402f;
+  --primary-glow: #34503f59;
+  --on-primary: #fffbf4;
+  --raised: #fffbf4;
+  --glass: #fffbf4d9;
+  --edge: #ffffffd9;
+  --inset: #2b252014;
+  --raise: 0 1px 2px #2b25201a, 0 3px 10px -4px #2b25201f;
+  --raise-hover: 0 2px 4px #2b25201a, 0 8px 18px -8px #2b252033;
+  --seg-on: #fffbf4;
+  --focus-soft: #4f72602e;
+  --glow-sage: #6e968340;
+  --glow-amber: #d49a7638;
+  --ring-grad: linear-gradient(135deg, #6e9683, #d49a76);
+  --menu-shadow: 0 18px 40px -16px #2b25204d, 0 2px 6px -2px #2b25201a;
+  --dialog-shadow: 0 40px 80px -30px #2b252066;
+  /* Illustration: soundscape strokes and background washes. */
+  --wave-a: #6e9683;
+  --wave-b: #c98f6b;
+  --atmo-a: #b9d3bf;
+  --atmo-b: #efbf9b;
   color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --brand-ink: #f2f0eb;
-    --bg: #191a1d;
-    --surface: #202226;
-    --panel: #27292e;
-    --fill: #2c2e33;
-    --fill-strong: #363940;
-    --highlight: #303e37;
-    --line: #393c42;
-    --line-strong: #565b64;
-    --ink: #eeeef0;
-    --ink-2: #b8bac1;
-    --ink-3: #92969f;
+    --brand-ink: #ece5d8;
+    --bg: #1a1816;
+    --surface: #211f1c;
+    --panel: #282522;
+    --fill: #2e2a26;
+    --fill-strong: #38332e;
+    --highlight: #2f3a33;
+    --line: #3a3530;
+    --line-strong: #5a5249;
+    --ink: #efe9df;
+    --ink-2: #bdb3a6;
+    --ink-3: #968b7f;
     --accent: #47624e;
     --accent-strong: #5d7c62;
-    --olive: #9cbdaa;
+    --olive: #9cc0aa;
     --alert-bg: #372d26;
     --alert-ink: #d3a28b;
     --danger: #cf6a58;
-  }
-  .player-dock > select {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23a6b098' stroke-width='1.5' stroke-linecap='round'/></svg>");
+    --primary-top: #668d73;
+    --primary-bottom: #4a6855;
+    --primary-ring: #3a5444;
+    --primary-glow: #8fb8a247;
+    --on-primary: #f6f1e8;
+    --raised: #312d29;
+    --glass: #2d2a26d9;
+    --edge: #ffffff14;
+    --inset: #00000047;
+    --raise: 0 1px 2px #00000066, 0 3px 10px -4px #00000066;
+    --raise-hover: 0 2px 4px #00000066, 0 10px 22px -8px #00000080;
+    --seg-on: #45403a;
+    --focus-soft: #9cc0aa33;
+    --glow-sage: #8fb8a233;
+    --glow-amber: #d49a762b;
+    --ring-grad: linear-gradient(135deg, #8fb8a2, #d49a76);
+    --menu-shadow: 0 18px 40px -16px #000000b3, 0 0 0 1px #ffffff0a;
+    --dialog-shadow: 0 40px 80px -30px #000000d9;
+    --wave-a: #8fb8a2;
+    --wave-b: #d49a76;
+    --atmo-a: #6f9a7f;
+    --atmo-b: #b9805a;
   }
 }
 * {
@@ -83,7 +126,7 @@ button {
   border: 1px solid var(--line);
   background: transparent;
   color: inherit;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 10px 15px;
 }
 button:hover {
@@ -226,7 +269,7 @@ input[type="file"] {
 }
 .dot.green {
   background: var(--olive);
-  box-shadow: 0 0 0 3px var(--highlight);
+  box-shadow: 0 0 0 3px var(--glow-sage);
 }
 .player-main {
   width: 100%;
@@ -256,7 +299,7 @@ input[type="file"] {
 .eyebrow {
   font-size: 10px;
   letter-spacing: 2px;
-  color: #88977c;
+  color: var(--olive);
   margin-bottom: 22px;
 }
 .welcome h1 {
@@ -316,8 +359,9 @@ input[type="file"] {
   overflow-wrap: anywhere;
 }
 .alert button {
-  border: 0;
-  padding: 0 5px;
+  flex: none;
+  margin: -4px -8px -4px 8px;
+  color: inherit;
 }
 .player-card {
   display: flex;
@@ -408,22 +452,9 @@ input[type="file"] {
   gap: 10px;
   margin-top: 19px;
 }
-.controls button {
-  font-size: 12px;
-  padding: 9px 13px;
-}
 .controls .play {
-  width: 42px;
-  height: 42px;
-  background: var(--accent);
-  color: white;
-  border: 0;
-  border-radius: 50%;
-  font-size: 16px;
-  padding: 0;
-}
-.controls .resume {
-  background: var(--fill-strong);
+  width: var(--h-lg);
+  height: var(--h-lg);
 }
 .controls select {
   margin-left: auto;
@@ -502,15 +533,37 @@ details small {
   border-left: 1px solid var(--fill-strong);
   padding-left: 30px;
 }
-.mic {
-  font-size: 10px;
-  padding: 7px 10px;
-  border-color: var(--fill-strong);
+/* Read-only state never looks like a control: a dot and small text, or a soft pill while live. */
+.panel-heading > :is(.mic, .transcript-following) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.panel-heading > .mic:not(.active)::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.panel-heading > .mic.active,
+.panel-heading > .transcript-following {
+  padding: 0 10px;
+  border-radius: var(--r-full);
+  background: var(--glow-sage);
   color: var(--olive);
 }
-.mic.active {
-  background: var(--fill-strong);
-  color: var(--olive);
+.panel-heading > .transcript-following::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .messages {
   height: 245px;
@@ -581,8 +634,8 @@ details small {
   object-fit: contain;
 }
 .chat-avatar.is-guest {
-  background: #85878b26;
-  color: #92959b;
+  background: var(--fill-strong);
+  color: var(--ink-3);
 }
 .chat-avatar svg {
   width: 19px;
@@ -610,7 +663,7 @@ details small {
   overflow-wrap: anywhere;
   background: var(--fill);
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: 14px;
 }
 .message.user p {
   border-top-left-radius: 3px;
@@ -619,28 +672,59 @@ details small {
   background: var(--fill-strong);
   border-top-right-radius: 3px;
 }
+/* The composer is the chat's centrepiece: it glows on focus and breathes while the mic is live. */
 .conversation form {
   display: flex;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 7px 7px 7px 16px;
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px var(--line),
+    var(--raise);
+  transition: box-shadow 240ms ease;
+}
+.conversation form:focus-within {
+  box-shadow:
+    0 0 0 1.5px var(--olive),
+    0 0 0 6px var(--glow-sage),
+    0 22px 44px -22px var(--glow-amber);
+}
+.conversation form.is-listening {
+  animation: composer-listen 2.2s ease-in-out infinite;
+}
+@keyframes composer-listen {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1.5px var(--olive),
+      0 0 0 5px var(--glow-sage),
+      0 22px 44px -22px var(--glow-amber);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1.5px var(--olive),
+      0 0 0 10px transparent,
+      0 26px 50px -20px var(--glow-amber);
+  }
 }
 .conversation form input {
   width: 100%;
   min-width: 0;
   border: 0;
   background: none;
-  padding: 7px 9px;
-  font-size: 12px;
+  padding: 8px 0;
+  font-size: 14px;
   color: inherit;
   outline: none;
 }
-.conversation form button {
-  background: var(--olive);
-  color: white;
-  border: 0;
-  padding: 5px 10px;
+.conversation form input::placeholder {
+  color: var(--ink-3);
+}
+.conversation form .btn {
+  flex: none;
 }
 .busy {
   font-size: 12px;
@@ -842,10 +926,6 @@ progress {
   font-variant-numeric: tabular-nums;
   padding-top: 7px;
 }
-.transcript-follow {
-  padding: 5px 9px;
-  font-size: 11px;
-}
 .transcript-empty {
   color: var(--ink-3);
   font-size: 14px;
@@ -1009,7 +1089,7 @@ progress {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding-bottom: 96px;
+    padding-bottom: 112px;
   }
   .shell .player-main.listening-layout > .player-header {
     flex-shrink: 0;
@@ -1105,28 +1185,32 @@ progress {
   padding: 10px 0;
   font-size: 13px;
 }
-.followup-window button {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 10px;
-  background: var(--panel);
-  color: inherit;
+/* Push to talk is a voice control, so it wears the gradient ring. */
+.push-to-talk,
+.push-to-talk:hover:not(:disabled) {
+  background:
+    linear-gradient(var(--raised), var(--raised)) padding-box,
+    var(--ring-grad) border-box;
 }
 .push-to-talk {
   width: 100%;
+  min-height: 48px;
   padding: 12px;
   margin-bottom: 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: var(--fill);
-  color: var(--accent);
+  border: 1.5px solid transparent;
+  border-radius: var(--r-full);
+  color: var(--ink);
+  font-weight: 500;
+  box-shadow:
+    0 4px 14px -6px var(--glow-sage),
+    0 6px 18px -10px var(--glow-amber);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 .push-to-talk.recording {
-  background: var(--accent);
-  color: white;
+  color: var(--olive);
+  animation: voice-halo 1.8s ease-in-out infinite;
 }
 .push-to-talk:disabled {
   opacity: 0.5;
@@ -1135,8 +1219,7 @@ progress {
   font-weight: 600;
 }
 .listening-options select:focus-visible,
-.push-to-talk:focus-visible,
-.followup-window button:focus-visible {
+.push-to-talk:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -1187,66 +1270,43 @@ progress {
   font-size: 12px;
   color: var(--ink-2);
 }
+/* Visuals come from .btn-secondary and .menu in components.css. */
 .language-select-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 10px;
-  color: inherit;
-  background: transparent;
-  font-size: inherit;
-  cursor: pointer;
+  padding: 0 12px;
+  font-size: 13px;
 }
-.language-select-trigger:hover,
 .language-select.open .language-select-trigger {
-  background: var(--highlight);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--ink-3),
+    0 0 0 4px var(--focus-soft);
 }
 .language-select-flag {
-  width: 15px;
-  height: 10px;
+  width: 16px;
+  height: 11px;
   display: block;
+  border-radius: 2px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.language-select-option .language-select-flag {
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
 }
 .language-select-caret {
   width: 8px;
   height: 5px;
-  transition: transform 150ms;
+  color: var(--ink-3);
+  transition: transform 180ms ease;
 }
 .language-select.open .language-select-caret {
   transform: rotate(180deg);
 }
 .language-select-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  min-width: 100%;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
   z-index: 40;
-}
-.language-select-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 5px;
-  white-space: nowrap;
-  cursor: pointer;
-  outline: none;
-}
-.language-select-option:hover,
-.language-select-option:focus-visible {
-  background: var(--highlight);
-}
-.language-select-option[aria-selected="true"] {
-  color: var(--ink);
-  font-weight: 500;
 }
 
 /* Readable application typography; system families work without remote font loading. */
@@ -1414,16 +1474,30 @@ progress {
 }
 
 /* Music-player hierarchy: a quiet episode header, reading space, and a steady transport. */
+/* The transport is a floating capsule drawn inside a full-width, bottom-flush bar. */
 .player-dock {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 1.5fr) minmax(70px, 1fr);
   align-items: center;
   gap: 24px;
-  min-height: 92px;
-  border-top: 1px solid var(--line);
-  background: var(--fill);
-  padding: 11px 48px;
-  box-shadow: 0 -7px 24px rgb(45 65 45 / 5%);
+  min-height: 96px;
+  padding: 16px 60px;
+}
+.player-dock::before {
+  content: "";
+  position: absolute;
+  inset: 8px 28px 10px;
+  z-index: -1;
+  border-radius: var(--r-full);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--line),
+    0 18px 40px -20px color-mix(in srgb, var(--ink) 30%, transparent);
 }
 .dock-title {
   display: flex;
@@ -1431,44 +1505,44 @@ progress {
   min-width: 0;
   gap: 12px;
 }
+/* A small record that turns while audio plays. */
 .dock-art {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
+  display: grid;
+  place-items: center;
   flex: 0 0 44px;
   width: 44px;
   height: 44px;
-  border-radius: 7px;
-  background: var(--fill-strong);
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle,
+    #2b2520 0 1.5px,
+    #463e37 1.5px 3px
+  );
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--ink) 22%, transparent);
+  animation: disc-spin 9s linear infinite;
+  animation-play-state: paused;
 }
-.dock-art i,
+.dock-art.playing {
+  animation-play-state: running;
+}
+.dock-art::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ring-grad);
+  box-shadow: 0 0 0 2px #2b2520;
+}
+@keyframes disc-spin {
+  to {
+    rotate: 360deg;
+  }
+}
 .waveform i {
   width: 3px;
   border-radius: 2px;
   background: var(--olive);
   height: 7px;
-}
-.dock-art i:nth-child(2) {
-  height: 15px;
-}
-.dock-art i:nth-child(3) {
-  height: 11px;
-}
-.dock-art i:nth-child(4) {
-  height: 5px;
-}
-.dock-art.playing i {
-  animation: eq 900ms ease-in-out infinite alternate;
-}
-.dock-art.playing i:nth-child(2) {
-  animation-delay: 150ms;
-}
-.dock-art.playing i:nth-child(3) {
-  animation-delay: 300ms;
-}
-.dock-art.playing i:nth-child(4) {
-  animation-delay: 450ms;
 }
 @keyframes eq {
   from {
@@ -1522,11 +1596,18 @@ progress {
   font-size: 12px;
   font-weight: 500;
 }
+/* Desktop: play sits beside the waveform on one line; narrow layouts regroup via grid areas. */
 .dock-transport {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
+  align-items: center;
+  gap: 16px;
   min-width: 0;
+}
+.dock-transport > .dock-progress {
+  flex: 1;
+}
+.dock-transport > .controls {
+  order: -1;
 }
 .dock-progress {
   display: grid;
@@ -1540,64 +1621,102 @@ progress {
 .dock-progress span:last-child {
   text-align: right;
 }
+/* Waveform seek bar: decorative bars, with the real range input layered on top for keyboard and AT. */
 .timeline-wrap {
   position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
+  height: 30px;
+  border-radius: 6px;
+}
+.timeline-wave {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.timeline-wave i {
+  flex: 1;
+  min-width: 1px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transition: background-color 160ms ease;
+}
+.timeline-wave i.on {
+  background: var(--olive);
 }
 .timeline-wrap .timeline {
-  flex: 1;
-  height: 16px;
-  margin: 0;
-}
-.timeline-anchor,
-.timeline-resume {
   position: absolute;
-  top: 50%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+.timeline-wrap:has(.timeline:focus-visible) {
+  outline: 2px solid var(--olive);
+  outline-offset: 4px;
+}
+.timeline-anchor {
+  position: absolute;
+  top: -4px;
   width: 2px;
-  height: 7px;
+  height: 5px;
   border-radius: 1px;
-  background: var(--olive);
-  opacity: 0.55;
-  transform: translate(-50%, -50%);
+  background: var(--ring-grad);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 .timeline-resume {
-  width: 6px;
-  height: 6px;
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--accent);
-  opacity: 1;
+  background: var(--primary-bottom);
+  box-shadow: 0 0 0 2px var(--panel);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 .player-dock .controls {
   justify-content: center;
   margin: 0;
 }
-.player-dock .controls .play {
-  width: 36px;
-  height: 36px;
-  display: inline-grid;
-  place-content: center;
-}
-.player-dock > select {
+.player-dock > .speed-select {
   justify-self: end;
-  appearance: none;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 5px 22px 5px 8px;
-  background:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%2366725c' stroke-width='1.5' stroke-linecap='round'/></svg>")
-      no-repeat right 7px center,
-    transparent;
-  color: var(--ink-2);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
 }
-.player-dock > select:hover {
-  border-color: var(--line);
-  background-color: var(--fill);
+.speed-select {
+  position: relative;
+}
+.speed-select-trigger {
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.speed-select-caret {
+  width: 8px;
+  height: 5px;
+  color: var(--ink-3);
+  transition: transform 180ms ease;
+}
+.speed-select.open .speed-select-trigger {
+  background: var(--fill);
+  color: var(--ink);
+}
+.speed-select.open .speed-select-caret {
+  transform: rotate(180deg);
+}
+.speed-select-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  z-index: 40;
+  transform-origin: bottom right;
+}
+.speed-select-option {
+  grid-template-columns: 1fr auto;
 }
 .transcript-cue {
   position: relative;
@@ -1614,9 +1733,14 @@ progress {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--accent);
-  color: white;
-  font-size: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--on-primary);
+  background: linear-gradient(180deg, var(--primary-top), var(--primary-bottom));
+  box-shadow:
+    inset 0 1px 0 #ffffff38,
+    0 0 0 1px var(--primary-ring),
+    0 4px 12px -4px var(--primary-glow);
   opacity: 0;
   pointer-events: none;
   transform: scale(0.84);
@@ -1639,8 +1763,14 @@ progress {
 .transcript-line.is-selected:not(.is-current) {
   background: var(--fill);
 }
+.transcript-jump svg {
+  width: 10px;
+  height: 10px;
+  margin-left: 1px;
+}
 .transcript-jump:hover {
-  background: var(--accent-strong);
+  background: linear-gradient(180deg, var(--primary-top), var(--primary-bottom));
+  filter: brightness(1.08);
 }
 .transcript-jump:focus-visible {
   outline: 2px solid var(--accent);
@@ -1651,10 +1781,16 @@ progress {
     transition: none;
   }
   .message,
-  .dock-art.playing i,
+  .dock-art,
   .empty-chat .waveform i,
+  .conversation form.is-listening,
+  .push-to-talk.recording,
   .player-dock .controls .play.playing {
     animation: none;
+  }
+  .timeline-wave i,
+  .conversation form {
+    transition: none;
   }
 }
 .player-dock .controls .play.playing {
@@ -1662,13 +1798,22 @@ progress {
 }
 @keyframes play-pulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+    box-shadow:
+      inset 0 1px 0 #ffffff38,
+      0 0 0 1px var(--primary-ring),
+      0 0 0 0 var(--primary-glow);
   }
   70% {
-    box-shadow: 0 0 0 12px transparent;
+    box-shadow:
+      inset 0 1px 0 #ffffff38,
+      0 0 0 1px var(--primary-ring),
+      0 0 0 12px transparent;
   }
   100% {
-    box-shadow: 0 0 0 0 transparent;
+    box-shadow:
+      inset 0 1px 0 #ffffff38,
+      0 0 0 1px var(--primary-ring),
+      0 0 0 0 transparent;
   }
 }
 @media (min-width: 1001px) {
@@ -1701,7 +1846,7 @@ progress {
 }
 @media (max-width: 1000px) {
   .shell .player-main {
-    padding-bottom: 125px;
+    padding-bottom: 136px;
   }
   .shell .player-main .player-card,
   .shell .player-main .player-card.compact {
@@ -1730,9 +1875,13 @@ progress {
     bottom: 0;
     grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas: "title controls speed" "progress progress progress";
-    gap: 4px 13px;
+    gap: 6px 13px;
     min-height: 0;
-    padding: 8px 26px max(8px, env(safe-area-inset-bottom));
+    padding: 16px 30px max(16px, env(safe-area-inset-bottom));
+  }
+  .shell .player-main .player-dock::before {
+    inset: 6px 12px max(6px, env(safe-area-inset-bottom));
+    border-radius: 28px;
   }
   .dock-title {
     grid-area: title;
@@ -1746,7 +1895,7 @@ progress {
   .player-dock .controls {
     grid-area: controls;
   }
-  .player-dock > select {
+  .player-dock > .speed-select {
     grid-area: speed;
   }
 }
@@ -1758,7 +1907,10 @@ progress {
 @media (max-width: 650px) {
   .shell .player-main .player-dock {
     left: 0;
-    padding-inline: 20px;
+    padding-inline: 22px;
+  }
+  .shell .player-main .player-dock::before {
+    inset-inline: 8px;
   }
   .dock-art {
     width: 36px;
@@ -1772,8 +1924,8 @@ progress {
     font-size: 11px;
   }
   .player-dock .controls .play {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
   }
   .dock-progress {
     grid-template-columns: 36px minmax(0, 1fr) 36px;
@@ -1790,9 +1942,7 @@ progress {
 }
 .enable-microphone {
   margin-left: auto;
-  padding: 6px 9px;
-  font-size: 11px;
-  white-space: nowrap;
+  margin-right: 10px;
 }
 
 /* Library lives in the top bar; no permanent navigation column. */
@@ -1827,7 +1977,7 @@ progress {
 .player-navigation .library-trigger {
   width: auto;
   white-space: nowrap;
-  padding: 8px 14px;
+  padding: 0 14px;
 }
 .player-space-link {
   display: inline-flex;

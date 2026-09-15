@@ -293,7 +293,7 @@ export function Space({
               )}
               {page?.nextCursor && (
                 <button
-                  className="space-more"
+                  className="space-more btn btn-secondary btn-sm"
                   disabled={loadingMore}
                   onClick={() =>
                     void more().catch((cause) =>
@@ -311,7 +311,7 @@ export function Space({
             <summary>＋ {t("上传音频")}</summary>
             <button
               type="button"
-              className="space-sidebar-upload"
+              className="space-sidebar-upload btn btn-primary"
               disabled={
                 !uploadEnabled ||
                 !page ||
@@ -375,6 +375,7 @@ export function Space({
               {progress !== null && phase === "uploading" && (
                 <button
                   type="button"
+                  className="btn btn-quiet btn-sm"
                   onClick={() => controller.current?.abort()}
                 >
                   {t("取消上传")}
@@ -387,10 +388,20 @@ export function Space({
               {error}
               <button
                 type="button"
+                className="btn btn-quiet btn-icon btn-sm"
                 onClick={() => setError("")}
                 aria-label={t("关闭")}
               >
-                ×
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="m4 4 8 8M12 4l-8 8" />
+                </svg>
               </button>
             </div>
           )}
@@ -416,8 +427,21 @@ export function Space({
           {!user && error && (
             <div role="alert" className="space-alert">
               {error}
-              <button onClick={() => setError("")} aria-label={t("关闭")}>
-                ×
+              <button
+                className="btn btn-quiet btn-icon btn-sm"
+                onClick={() => setError("")}
+                aria-label={t("关闭")}
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="m4 4 8 8M12 4l-8 8" />
+                </svg>
               </button>
             </div>
           )}
@@ -433,7 +457,7 @@ export function Space({
               <h1>{t("我的空间")}</h1>
               <p>{t("你的音频，你可以加入的对话。")}</p>
               <p>{t("从音频库上传一段，或先探索公共音频。")}</p>
-              <a className="space-explore" href={publicHref}>
+              <a className="space-explore btn btn-secondary" href={publicHref}>
                 {t("探索公共音频")}
               </a>
             </section>

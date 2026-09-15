@@ -74,8 +74,14 @@ export function Landing({
           />
         </a>
         <div className="landing-nav-actions">
-          <a href="#how-it-works">{t("如何使用")}</a>
-          {spaceLink && <a href="/space">{t("我的空间")}</a>}
+          <a className="btn btn-quiet" href="#how-it-works">
+            {t("如何使用")}
+          </a>
+          {spaceLink && (
+            <a className="btn btn-quiet" href="/space">
+              {t("我的空间")}
+            </a>
+          )}
           <LanguageSelect />
         </div>
       </header>
@@ -99,13 +105,15 @@ export function Landing({
             <p className="hero-description">{t("让聆听，多一种可能。")}</p>
             <div className="hero-actions">
               <button
-                className="hero-cta"
+                className="hero-cta btn btn-primary btn-lg"
                 disabled={!demo}
                 onClick={() => demo && open(demo.id)}
               >
-                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <path d="M4 3.5c0-.8.9-1.3 1.6-.9l7 4.5a1 1 0 0 1 0 1.8l-7 4.5c-.7.4-1.6-.1-1.6-.9z" />
-                </svg>
+                <span className="btn-lead" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M4 2.8c0-.8.9-1.3 1.6-.9l7.4 4.7a1 1 0 0 1 0 1.8l-7.4 4.7c-.7.4-1.6-.1-1.6-.9z" />
+                  </svg>
+                </span>
                 {t("体验示例")}
               </button>
               {accountControl}

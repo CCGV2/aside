@@ -177,12 +177,12 @@ export function AccountControl({
   return (
     <>
       {user && enterSpace ? (
-        <a className="account-trigger" href="/space">
+        <a className="account-trigger btn btn-secondary" href="/space">
           Enter My Space
         </a>
       ) : (
         <button
-          className="account-trigger"
+          className="account-trigger btn btn-secondary"
           onClick={() => {
             setError("");
             setView(user ? "profile" : "login");
@@ -227,35 +227,83 @@ export function AccountControl({
               aria-modal="true"
               aria-labelledby="account-title"
             >
-              <button
-                className="account-close"
-                aria-label={t("关闭")}
-                onClick={() => setView("closed")}
-              >
-                ×
-              </button>
+              <div className="account-head">
+                <span className="account-badge" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  >
+                    <path d="M3 6v4M6 3.5v9M10 5v6M13 7v2" />
+                  </svg>
+                </span>
+                <button
+                  className="account-close btn btn-quiet btn-icon btn-sm"
+                  aria-label={t("关闭")}
+                  onClick={() => setView("closed")}
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m4 4 8 8M12 4l-8 8" />
+                  </svg>
+                </button>
+              </div>
               {view === "login" ? (
                 <>
-                  <span className="account-eyebrow">ASIDE / ACCOUNT</span>
-                  <h2 id="account-title">{t("从这里继续听")}</h2>
-                  <p>{t("登录后保存你的音频和收听进度。")}</p>
+                  <div className="account-intro">
+                    <h2 id="account-title">{t("从这里继续听")}</h2>
+                    <p>{t("登录后保存你的音频和收听进度。")}</p>
+                  </div>
                   {session?.googleEnabled && (
-                    <a className="account-google" href="/api/auth/google">
-                      {t("使用 Google 登录")} ↗
+                    <a
+                      className="account-google btn btn-secondary btn-lg btn-block"
+                      href="/api/auth/google"
+                    >
+                      <span className="account-g" aria-hidden="true">
+                        G
+                      </span>
+                      {t("使用 Google 登录")}
                     </a>
+                  )}
+                  {session?.googleEnabled && session.emailEnabled && (
+                    <div className="account-divider">{t("或用邮箱")}</div>
                   )}
                   {session?.emailEnabled && (
                     <form onSubmit={sent ? verify : send}>
-                      <label htmlFor="account-email">Email</label>
-                      <input
-                        id="account-email"
-                        type="email"
-                        autoComplete="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        required
-                        disabled={sent || busy}
-                      />
+                      <label htmlFor="account-email">{t("邮箱")}</label>
+                      <div className="input-wrap">
+                        <svg
+                          className="input-icon"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <rect x="2" y="3.5" width="12" height="9" rx="2" />
+                          <path d="m2.5 4.5 5.5 4 5.5-4" />
+                        </svg>
+                        <input
+                          id="account-email"
+                          className="input has-icon"
+                          type="email"
+                          autoComplete="email"
+                          placeholder="name@example.com"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                          required
+                          disabled={sent || busy}
+                        />
+                      </div>
                       {sent && (
                         <>
                           <label htmlFor="account-code">
@@ -263,6 +311,7 @@ export function AccountControl({
                           </label>
                           <input
                             id="account-code"
+                            className="input"
                             inputMode="numeric"
                             autoComplete="one-time-code"
                             pattern="[0-9]{8}"
@@ -274,7 +323,7 @@ export function AccountControl({
                           />
                           <button
                             type="button"
-                            className="account-text"
+                            className="account-text btn btn-quiet btn-sm"
                             onClick={() => {
                               setSent(false);
                               setCode("");
@@ -284,7 +333,10 @@ export function AccountControl({
                           </button>
                         </>
                       )}
-                      <button className="account-primary" disabled={busy}>
+                      <button
+                        className="account-primary btn btn-primary btn-lg btn-block"
+                        disabled={busy}
+                      >
                         {busy
                           ? t("请稍候…")
                           : sent
@@ -306,7 +358,6 @@ export function AccountControl({
                 </>
               ) : (
                 <>
-                  <span className="account-eyebrow">ASIDE / PROFILE</span>
                   <h2 id="account-title">{t("个人资料")}</h2>
                   <form onSubmit={save}>
                     <label className="account-avatar-picker">
@@ -341,6 +392,7 @@ export function AccountControl({
                     <label htmlFor="account-alias">{t("昵称")}</label>
                     <input
                       id="account-alias"
+                      className="input"
                       value={alias}
                       onChange={(event) => setAlias(event.target.value)}
                       maxLength={40}
@@ -349,6 +401,7 @@ export function AccountControl({
                     <label htmlFor="account-description">{t("介绍")}</label>
                     <textarea
                       id="account-description"
+                      className="input"
                       value={description}
                       onChange={(event) => setDescription(event.target.value)}
                       maxLength={500}
@@ -356,19 +409,25 @@ export function AccountControl({
                       placeholder={t("说说你喜欢听什么…")}
                     />
                     <small className="account-email">{user?.email}</small>
-                    <button className="account-primary" disabled={busy}>
+                    <button
+                      className="account-primary btn btn-primary btn-lg btn-block"
+                      disabled={busy}
+                    >
                       {busy ? t("请稍候…") : t("保存资料")}
                     </button>
                   </form>
                   <button
-                    className="account-text"
+                    className="account-text btn btn-quiet btn-sm"
                     onClick={() => void logout()}
                     disabled={busy}
                   >
                     {t("退出登录")}
                   </button>
                   {session?.googleEnabled && (
-                    <a className="account-text" href="/api/auth/google">
+                    <a
+                      className="account-text btn btn-quiet btn-sm"
+                      href="/api/auth/google"
+                    >
                       {t("关联 Google 账号")}
                     </a>
                   )}

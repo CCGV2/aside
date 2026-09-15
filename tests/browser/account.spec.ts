@@ -70,7 +70,7 @@ test("email sign-in opens an editable profile and sign-out returns to guest", as
   });
   await page.goto("/");
   await page.getByRole("button", { name: "登录 / 注册" }).click();
-  await page.getByLabel("Email").fill("listener@example.com");
+  await page.getByLabel("邮箱").fill("listener@example.com");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await page.getByLabel("邮件验证码").fill("12345678");
   await page.getByRole("button", { name: "验证并登录" }).click();

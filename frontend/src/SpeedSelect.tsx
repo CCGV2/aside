@@ -1,57 +1,29 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { setLocale, useLocale, type Locale } from "./i18n";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
+import { t } from "./i18n";
 
-function FlagZh() {
-  return (
-    <svg className="language-select-flag" viewBox="0 0 15 10" aria-hidden="true">
-      <rect width="15" height="10" fill="#de2910" />
-      <polygon
-        points="2.5,1 2.84,2.04 3.93,2.04 3.05,2.68 3.38,3.71 2.5,3.07 1.62,3.71 1.96,2.68 1.07,2.04 2.16,2.04"
-        fill="#ffde00"
-      />
-      <circle cx="5" cy="1" r="0.5" fill="#ffde00" />
-      <circle cx="6" cy="2" r="0.5" fill="#ffde00" />
-      <circle cx="6" cy="3.5" r="0.5" fill="#ffde00" />
-      <circle cx="5" cy="4.5" r="0.5" fill="#ffde00" />
-    </svg>
-  );
-}
-
-function FlagEn() {
-  return (
-    <svg className="language-select-flag" viewBox="0 0 15 10" aria-hidden="true">
-      <rect width="15" height="10" fill="#ffffff" />
-      {[0, 2.86, 5.72, 8.58].map((y) => (
-        <rect key={y} y={y} width="15" height="1.43" fill="#b31942" />
-      ))}
-      <rect width="6" height="5.72" fill="#0a3161" />
-      {[1.2, 2.86, 4.52].map((cy) =>
-        [1.5, 3, 4.5].map((cx) => (
-          <circle key={`${cx},${cy}`} cx={cx} cy={cy} r="0.5" fill="#ffffff" />
-        )),
-      )}
-    </svg>
-  );
-}
-
-// Each hint is written in its own language so it reads for the person choosing it.
-const languages = [
-  { value: "zh", label: "中文", hint: "优先展示中文节目", Flag: FlagZh },
-  { value: "en", label: "English", hint: "English programs first", Flag: FlagEn },
+const rates = [
+  { value: 0.75, hint: "慢一点，适合外语" },
+  { value: 1, hint: "原速" },
+  { value: 1.25, hint: "稍快一点" },
+  { value: 1.5, hint: "快速过一遍" },
 ] as const;
 
-export function LanguageSelect() {
-  const locale = useLocale();
+export function SpeedSelect({
+  onChange,
+}: {
+  onChange: (rate: number) => void;
+}) {
+  const [rate, setRate] = useState<number>(1);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<(HTMLLIElement | null)[]>([]);
-
-  const current =
-    languages.find((language) => language.value === locale) ?? languages[0];
-  const selectedIndex = languages.findIndex(
-    (language) => language.value === locale,
-  );
+  const selectedIndex = rates.findIndex((item) => item.value === rate);
 
   useEffect(() => {
     if (!open) return;
@@ -73,8 +45,9 @@ export function LanguageSelect() {
     };
   }, [open, selectedIndex]);
 
-  const select = (value: Locale) => {
-    setLocale(value);
+  const select = (value: number) => {
+    setRate(value);
+    onChange(value);
     setOpen(false);
     triggerRef.current?.focus();
   };
@@ -85,26 +58,24 @@ export function LanguageSelect() {
     );
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      optionRefs.current[(index + 1) % languages.length]?.focus();
+      optionRefs.current[(index + 1) % rates.length]?.focus();
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      optionRefs.current[
-        (index - 1 + languages.length) % languages.length
-      ]?.focus();
+      optionRefs.current[(index - 1 + rates.length) % rates.length]?.focus();
     } else if (event.key === "Tab") {
       setOpen(false);
     }
   };
 
   return (
-    <div className={`language-select${open ? " open" : ""}`} ref={rootRef}>
+    <div className={`speed-select${open ? " open" : ""}`} ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
-        className="language-select-trigger btn btn-secondary"
+        className="speed-select-trigger btn btn-quiet btn-sm"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={locale === "zh" ? "界面语言" : "Interface language"}
+        aria-label={t("播放速度")}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={(event) => {
           if (
@@ -116,13 +87,8 @@ export function LanguageSelect() {
           }
         }}
       >
-        <current.Flag />
-        <span>{current.label}</span>
-        <svg
-          className="language-select-caret"
-          viewBox="0 0 10 6"
-          aria-hidden="true"
-        >
+        <span>{rate}×</span>
+        <svg className="speed-select-caret" viewBox="0 0 10 6" aria-hidden="true">
           <path
             d="M1 1l4 4 4-4"
             fill="none"
@@ -134,24 +100,24 @@ export function LanguageSelect() {
       </button>
       {open && (
         <ul
-          className="language-select-menu menu"
+          className="speed-select-menu menu"
           role="listbox"
-          aria-label={locale === "zh" ? "界面语言" : "Interface language"}
+          aria-label={t("播放速度")}
           onKeyDown={onMenuKeyDown}
         >
           <li className="menu-label" role="presentation" aria-hidden="true">
-            {locale === "zh" ? "界面语言" : "Interface language"}
+            {t("播放速度")}
           </li>
-          {languages.map(({ value, label, hint, Flag }, index) => (
+          {rates.map(({ value, hint }, index) => (
             <li
               key={value}
               ref={(node) => {
                 optionRefs.current[index] = node;
               }}
               role="option"
-              aria-selected={value === locale}
+              aria-selected={value === rate}
               tabIndex={-1}
-              className="language-select-option menu-option"
+              className="speed-select-option menu-option"
               onClick={() => select(value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
@@ -160,10 +126,9 @@ export function LanguageSelect() {
                 }
               }}
             >
-              <Flag />
               <span className="menu-option-text">
-                <b>{label}</b>
-                <small>{hint}</small>
+                <b>{value}×</b>
+                <small>{t(hint)}</small>
               </span>
               <svg
                 className="menu-check"

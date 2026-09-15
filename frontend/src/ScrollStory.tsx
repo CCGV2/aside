@@ -10,6 +10,7 @@ export function ScrollStory() {
   const root = useRef<HTMLElement>(null);
   const [step, setStep] = useState(0);
   const manual = useRef(false);
+  const controls = useRef<HTMLDivElement>(null);
   const steps = [t("听一段"), t("说说你的想法"), t("一起聊下去"), t("接着听")];
   const headlines = [
     t("好内容，值得听进去。"),
@@ -65,6 +66,23 @@ export function ScrollStory() {
       cancelAnimationFrame(frame);
     };
   }, []);
+  // Slide the raised pill under whichever step is current.
+  useEffect(() => {
+    const element = controls.current!;
+    const place = () => {
+      const active = element.querySelector<HTMLElement>('[aria-pressed="true"]');
+      const thumb = element.querySelector<HTMLElement>(".story-controls-thumb");
+      if (!active || !thumb) return;
+      // Clamp to the track so a stale position never widens the page mid-resize.
+      thumb.style.width = `min(${active.offsetWidth}px, calc(100% - 8px))`;
+      thumb.style.left = `min(${active.offsetLeft}px, calc(100% - 4px - ${active.offsetWidth}px))`;
+      element.classList.add("ready");
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [step]);
   function select(index: number) {
     const element = root.current!;
     setStep(index);
@@ -183,7 +201,12 @@ export function ScrollStory() {
             <span>02:32</span>
           </div>
         </div>
-        <div className="story-controls" aria-label={t("交互示意")}>
+        <div
+          className="story-controls"
+          ref={controls}
+          aria-label={t("交互示意")}
+        >
+          <span className="story-controls-thumb" aria-hidden="true" />
           {steps.map((label, index) => (
             <button
               key={index}
