@@ -219,3 +219,13 @@ npm run db:cloudflare:production
 `npm run check`、93 项项目测试通过；本地前后端完整 Chrome 回归 36 项中 35 项通过，唯一失败的 `public-samples.spec.ts` 期望 6 张示例卡片而本地数据有 12 张，与本次改动无关（该测试与示例内容未修改）。测试调整两处：登录用例按“邮箱”标签查找；侧栏长标题用例先悬停一行溢出标题再断言滚动。改版中修复英文首页 390px 顶栏溢出 8px、窗口缩小瞬间演示区选中块撑宽页面两个问题。
 
 生产 Worker `6fdc1946-309e-4f55-980c-625c318487a4`（`--containers-rollout=none`，保留现有 Container），绑定仍含 `EMAIL`、`ALLOW_UPLOADS=true`。正式域名 `/` 引用 `index-BsvDV2Uc.js`、`index-CaLDQcpC.css`，均 200 且 MIME 正确；`/aside-mark.svg` 返回新颜色；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200。线上浏览器在浅色/暗色、1440 与 390 宽度下核对：首页背景变量为新值、主按钮为新组件、无横向溢出；进入示例后播放条贴底、64 条波形、倍速菜单可打开、声音按钮与对话框存在，控制台无错误。未在生产用登录账号或真实麦克风做语音对话。
+
+## 上传音频的内嵌封面
+
+2026-09-14：上传文件自带的封面（ID3 APIC、MP4 covr、FLAC PICTURE，FFmpeg 中标记为 `attached_pic` 的流）在准备音频时重新编码为不超过 600px 的 JPEG，存为 R2 `episodes/{id}/cover.jpg`，节目元数据加 `cover: true`，由 `GET /api/episodes/:id/cover` 返回。云端由媒体容器在 `/prepare` 中提取、容器新增 `/cover`，Workflow 新增 `cover` 步骤写入 R2（容器缓存丢失时先 rehydrate）；提取或写入失败只是没有封面，不会让分析失败。播放卡片的大封面在当前布局中始终隐藏，所以封面显示为底部播放条唱片的盘面，加载失败回退为原唱片样式。本次之前上传的节目不补提封面，无需数据库迁移。
+
+`npm run check`、95 项项目测试、30 项 Cloudflare 测试和 `player.spec.ts` 4 项浏览器用例通过（后者在隔离数据目录、无 API key 的本地前后端上执行，示例节目手动加入封面）。新增测试覆盖真实 FFmpeg 生成的带封面 MP3 提取为 600×400 JPEG、无封面返回 404、容器丢失时分析仍完成、生产 Workflow 经 Worker 返回封面。
+
+本次**包含 Container 发布**（封面提取代码在容器内）：镜像 `sha256:b909d0f105ec43cdb1e34b58ac800553e6aa101e850e0a35fa4c8b168fe772a3`（取代 `a20de65a…`），Container app `a03cceeb-6ffb-4d0f-af94-ce14bd76c7a3` 已修改；生产 Worker `41070fe5-d155-495b-a1c1-96f16493c28a`。发布期间旧容器没有 `/cover`，Workflow 按无封面处理。正式域名 `/` 引用 `index-BuebBj1g.js`、`index-CZcQoEp4.css`，均 200 且 MIME 正确；`/api/health` 为 `liveConfigured=true`、`uploadsEnabled=true`；公开列表 8 条均无封面，`/api/episodes/luxun-ah-q/cover` 返回 404，音频 Range 返回 206。
+
+未验证：没有在生产上传带封面的真实文件走完整分析（会产生付费模型调用），因此云端提取、R2 写入和线上播放条显示封面都只由本地与 Miniflare 测试覆盖；未观察容器实例何时全部切换到新镜像；未在线上浏览器打开播放器核对。
