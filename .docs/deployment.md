@@ -209,3 +209,13 @@ npm run db:cloudflare:production
 2026-09-14：Hero 声波从整组上下起伏改为波纹在两个固定鼓包内缓慢横向流动（`HeroSoundscape.tsx` 按帧重算路径），离开视口或页面隐藏时停止，交互示意第 2、3 步（说话/暂停）减速停下，`prefers-reduced-motion` 下保持静止。Hero 只发布 `--hero-progress` 与 `--hero-exit`（二次缓入），声波的下沉/压扁/淡出和文案的上移/淡出都由 CSS 计算。两层背景光晕（`.story-pin` 伪元素与 `.hero::after`）左右加渐隐遮罩，去掉距视口边缘 12px 处的硬边；Hero 最小高度收紧、钉住区改为 1:2 的上下留白，按钮到下一屏标题的间距 1440×900 从约 165px 降到 107px，390×844 从约 245px 降到 142px。
 
 `npm run check`、93 项项目测试和滚动叙事浏览器用例通过；本地在 4 倍 CPU 降速下桌面与手机帧 p95 约 17.5ms。生产 Worker `228f2bf5-6c8d-4c7d-a1c6-cc1297fbc385`（`--containers-rollout=none`，保留现有 Container），绑定仍含 `EMAIL`、`ALLOW_UPLOADS=true`。正式域名 `/` 引用 `index-QRrIwGIu.js`、`index-CU7YqdCy.css`，均 200 且 MIME 正确；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200。线上浏览器实测桌面与手机声波在流动、间距与本地一致、滚动时文案淡出生效、无控制台错误。其余需要后端数据的浏览器用例本轮未执行；动效观感只看了截图，没有录屏人工复核。
+
+## 暖色配色与组件系统
+
+2026-09-14：全站浅色/暗色配色从冷灰改为暖色中性色，品牌绿用于 Hero 标题第二行、Logo（`aside-mark.svg`）与进度；浅色 `--ink-3` 取 `#776b60`（对比度约 4.6:1），比设计稿 `#8b7f73` 略深。新增 `frontend/src/components.css`：胶囊按钮（主/次/文字/中性，以及仅用于语音的渐变描边按钮）、带标题与说明的毛玻璃菜单、分段切换和输入框，颜色与阴影变量集中在 `style.css`。
+
+首页主次按钮、语言菜单、演示区步骤（滑动选中块，位置用 `min()` 限制在轨道内）、示例卡片和登录弹窗（标签改为“邮箱”）先用上新组件；播放器随后改为胶囊播放条（装饰性波形叠在原生进度条下，保留键盘与读屏）、`SpeedSelect.tsx` 倍速菜单、发光对话框和状态标签；侧栏长标题只在悬停或聚焦时滚动；My Space 的上传、加载更多和提示关闭也换成同一套按钮。“跟随播放”保留原有“回到当前播放”按钮逻辑，麦克风按钮文案仍为“开启麦克风”。
+
+`npm run check`、93 项项目测试通过；本地前后端完整 Chrome 回归 36 项中 35 项通过，唯一失败的 `public-samples.spec.ts` 期望 6 张示例卡片而本地数据有 12 张，与本次改动无关（该测试与示例内容未修改）。测试调整两处：登录用例按“邮箱”标签查找；侧栏长标题用例先悬停一行溢出标题再断言滚动。改版中修复英文首页 390px 顶栏溢出 8px、窗口缩小瞬间演示区选中块撑宽页面两个问题。
+
+生产 Worker `6fdc1946-309e-4f55-980c-625c318487a4`（`--containers-rollout=none`，保留现有 Container），绑定仍含 `EMAIL`、`ALLOW_UPLOADS=true`。正式域名 `/` 引用 `index-BsvDV2Uc.js`、`index-CaLDQcpC.css`，均 200 且 MIME 正确；`/aside-mark.svg` 返回新颜色；`/api/health`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og-image.png` 均 200。线上浏览器在浅色/暗色、1440 与 390 宽度下核对：首页背景变量为新值、主按钮为新组件、无横向溢出；进入示例后播放条贴底、64 条波形、倍速菜单可打开、声音按钮与对话框存在，控制台无错误。未在生产用登录账号或真实麦克风做语音对话。
