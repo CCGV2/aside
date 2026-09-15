@@ -1,6 +1,7 @@
 import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -947,9 +948,108 @@ test("real media probe accepts exactly five hours and rejects one second more be
   }
 });
 
+test("actual FFmpeg service extracts embedded artwork only when the file has one", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-cover-test-"));
+  const app = mediaApp(root),
+    withCover = crypto.randomUUID(),
+    plain = crypto.randomUUID();
+  const mp3 = (name, picture) => {
+    const path = join(root, name);
+    execFileSync("ffmpeg", [
+      "-v", "error",
+      "-f", "lavfi", "-t", "1", "-i", "anullsrc=r=24000:cl=mono",
+      ...(picture
+        ? ["-f", "lavfi", "-i", "color=c=red:s=1200x800:d=1", "-map", "0:a", "-map", "1:v", "-frames:v", "1", "-c:v", "png", "-disposition:v", "attached_pic"]
+        : []),
+      "-c:a", "libmp3lame", "-id3v2_version", "3", path,
+    ]);
+    return readFile(path);
+  };
+  const prepare = async (id, payload) =>
+    app.inject({
+      method: "POST",
+      url: `/prepare?id=${id}`,
+      headers: { "content-type": "application/octet-stream" },
+      payload,
+    });
+  try {
+    const first = await prepare(withCover, await mp3("cover.mp3", true));
+    assert.equal(first.statusCode, 200, first.body);
+    assert.equal(first.json().cover, true);
+    const cover = await app.inject(`/cover?id=${withCover}`);
+    assert.equal(cover.statusCode, 200);
+    assert.equal(cover.headers["content-type"], "image/jpeg");
+    assert.deepEqual([...cover.rawPayload.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+    await app.inject({ method: "DELETE", url: `/source?id=${withCover}` });
+    assert.equal((await app.inject(`/cover?id=${withCover}`)).statusCode, 409);
+    const second = await prepare(plain, await mp3("plain.mp3", false));
+    assert.equal(second.statusCode, 200, second.body);
+    assert.equal(second.json().cover, false);
+    assert.equal((await app.inject(`/cover?id=${plain}`)).statusCode, 404);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("analysis stores extracted artwork and never fails over a lost cover", async () => {
+  const provider = {
+    transcribeAudio: async () => [
+      { id: "p1", startMs: 100, endMs: 900, text: "Hello", speaker: "s1" },
+    ],
+    enrichAudio: async () => ({
+      summary: "Summary",
+      hostStyle: "Calm",
+      speakers: [],
+      groups: [{ firstId: "p1", lastId: "p1" }],
+    }),
+  };
+  const media = (cover) => ({
+    prepare: async () => ({
+      durationMs: 1000,
+      mimeType: "audio/mpeg",
+      cover: true,
+      pauses: [],
+      plan: [{ offsetMs: 0, durationMs: 1000 }],
+    }),
+    chunk: async () => new TextEncoder().encode("encoded"),
+    cover,
+    cleanup: async () => {},
+  });
+  const steps = { do: (_name, fn) => fn() };
+  const store = new CloudStore(db, bucket);
+  const kept = crypto.randomUUID();
+  await seed(kept, "owner", false, false);
+  await analyzeEpisode(
+    { DB: db, AUDIO: bucket },
+    kept,
+    steps,
+    media(async () => new TextEncoder().encode("jpeg")),
+    provider,
+  );
+  assert.equal((await store.episode(await store.row(kept))).cover, true);
+  assert.equal(await (await bucket.get(`episodes/${kept}/cover.jpg`)).text(), "jpeg");
+  const lost = crypto.randomUUID();
+  await seed(lost, "owner", false, false);
+  await analyzeEpisode(
+    { DB: db, AUDIO: bucket },
+    lost,
+    steps,
+    media(async () => {
+      throw Error("Source container is gone");
+    }),
+    provider,
+  );
+  const episode = await store.episode(await store.row(lost));
+  assert.equal(episode.status, "ready");
+  assert.equal(episode.cover, undefined);
+  assert.equal(await bucket.head(`episodes/${lost}/cover.jpg`), null);
+});
+
 test("production Workflow orchestrates R2, model adapters, D1 and container binding", async () => {
   const id = crypto.randomUUID();
-  await seed(id, "workflow-owner", false, false);
+  const listener = await visitor();
+  await seed(id, listener.id, false, false);
   const bindings = await mf.getBindings();
   const instance = await bindings.PROD_ANALYSIS.create({
     id,
@@ -966,6 +1066,14 @@ test("production Workflow orchestrates R2, model adapters, D1 and container bind
     episode = await store.episode(await store.row(id));
   assert.equal(episode.status, "ready");
   assert.equal(episode.analysis.passages[0].text, "A sentence");
+  assert.equal(episode.cover, true);
+  const cover = await listener.request(`/api/episodes/${id}/cover`);
+  assert.equal(cover.status, 200);
+  assert.equal(cover.headers.get("content-type"), "image/jpeg");
+  assert.equal(await cover.text(), "jpeg bytes");
+  const plain = crypto.randomUUID();
+  await seed(plain, listener.id);
+  assert.equal((await listener.request(`/api/episodes/${plain}/cover`)).status, 404);
 });
 test("admission failure blocks an upload and removes its original before any model request", async () => {
   const id = crypto.randomUUID();

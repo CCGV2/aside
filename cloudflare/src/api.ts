@@ -136,6 +136,18 @@ async function route(
       throw new HttpError(409, "音频仍在检查中或未通过检查");
     return audio(request, env, id, metadata.mimeType ?? "audio/mpeg");
   }
+  if (action === "cover" && method === "GET") {
+    const object = metadata.cover
+      ? await env.AUDIO.get(`episodes/${id}/cover.jpg`)
+      : null;
+    if (!object) throw new HttpError(404, "封面不存在");
+    return new Response(object.body, {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(object.size),
+      },
+    });
+  }
   if (action === "checkpoint") {
     if (method === "GET") {
       const result = await env.DB.prepare(

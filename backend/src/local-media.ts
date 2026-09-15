@@ -48,6 +48,61 @@ export async function probeAudio(path: string) {
 export async function probe(path: string) {
   return (await probeAudio(path)).durationMs;
 }
+/**
+ * Writes the file's embedded artwork (ID3 APIC, MP4 covr, FLAC PICTURE) as a
+ * JPEG no larger than 600px. Artwork is decorative: any failure means no cover.
+ */
+export async function extractCover(path: string, output: string) {
+  try {
+    const { stdout } = await exec("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v",
+      "-show_entries",
+      "stream=index:stream_disposition=attached_pic",
+      "-of",
+      "json",
+      path,
+    ]);
+    // A real video track is not artwork; only attached pictures count.
+    const stream = (JSON.parse(stdout).streams ?? []).find(
+      (s: { disposition?: { attached_pic?: number } }) =>
+        s.disposition?.attached_pic === 1,
+    );
+    if (!stream) return false;
+    await exec(
+      "ffmpeg",
+      [
+        "-y",
+        "-v",
+        "error",
+        "-i",
+        path,
+        "-map",
+        `0:${stream.index}`,
+        "-frames:v",
+        "1",
+        "-update",
+        "1",
+        // Re-encoding bounds the size and never serves uploaded image bytes as-is.
+        "-vf",
+        "scale=w=min(600\\,iw):h=min(600\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        "3",
+        "-f",
+        "image2",
+        output,
+      ],
+      { timeout: 60000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function withMedia<T>(
   objects: ObjectStorage,
@@ -56,6 +111,7 @@ export async function withMedia<T>(
     probe: () => ReturnType<typeof probeAudio>;
     silences: () => ReturnType<typeof findSilences>;
     chunk: (offsetMs: number, durationMs: number) => Promise<Uint8Array>;
+    cover: () => Promise<Uint8Array | undefined>;
   }) => Promise<T>,
 ): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "aside-media-")),
@@ -91,6 +147,12 @@ export async function withMedia<T>(
           { timeout: 120000 },
         );
         return new Uint8Array(await readFile(output));
+      },
+      cover: async () => {
+        const output = join(dir, "cover.jpg");
+        return (await extractCover(source, output))
+          ? new Uint8Array(await readFile(output))
+          : undefined;
       },
     });
   } finally {

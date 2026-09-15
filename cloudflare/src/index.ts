@@ -70,6 +70,18 @@ export class EpisodeAnalysis extends WorkflowEntrypoint<Env, AnalysisJob> {
         if (!result.ok || !result.body) throw Error("Audio encoding failed");
         return new Uint8Array(await result.arrayBuffer());
       },
+      cover: async () => {
+        const request = () =>
+          instance.fetch(new Request(`http://media/cover?id=${id}`));
+        let result = await request();
+        if (result.status === 409) {
+          await prepare();
+          result = await request();
+        }
+        if (result.status === 404) return undefined;
+        if (!result.ok) throw Error("Cover extraction failed");
+        return new Uint8Array(await result.arrayBuffer());
+      },
       cleanup: async () => {
         await instance.fetch(
           new Request(`http://media/source?id=${id}`, { method: "DELETE" }),

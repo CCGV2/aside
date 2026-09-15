@@ -86,6 +86,9 @@ export function PlayerView({
   const [enablingMic, setEnablingMic] = useState(false);
   const [compactEpisode, setCompactEpisode] = useState("");
   const compact = !!episode && compactEpisode === episode.id;
+  // A cover that fails to load falls back to the drawn art for that episode.
+  const [brokenCover, setBrokenCover] = useState("");
+  const showCover = !!episode?.cover && brokenCover !== episode.id;
   const panelId = useId();
   const waveHeights = useMemo(() => waveShape(episode?.id ?? ""), [episode?.id]);
   const [mobileTab, setMobileTab] = useState<"transcript" | "chat" | null>(
@@ -634,9 +637,17 @@ export function PlayerView({
       <div className="player-dock" aria-label={t("播放控制")}>
         <div className="dock-title" title={episode.title}>
           <span
-            className={`dock-art${listeningActive ? " playing" : ""}`}
+            className={`dock-art${listeningActive ? " playing" : ""}${showCover ? " has-cover" : ""}`}
             aria-hidden="true"
-          />
+          >
+            {showCover && (
+              <img
+                src={`/api/episodes/${episode.id}/cover`}
+                alt=""
+                onError={() => setBrokenCover(episode.id)}
+              />
+            )}
+          </span>
           <strong>{episode.title}</strong>
         </div>
         <div className="dock-transport">

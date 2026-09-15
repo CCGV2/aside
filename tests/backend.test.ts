@@ -1,7 +1,8 @@
 import type { BackendServices } from "../backend/src/services.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../backend/src/store.js";
@@ -145,6 +146,63 @@ test("real multipart upload persists playable WAV and blocks analysis without ke
     });
     assert.equal(bad.statusCode, 400);
     assert.equal(store.list().length, 1);
+  } finally {
+    await app.close();
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("upload keeps embedded artwork as a bounded JPEG cover; plain audio gets none", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aside-cover-"));
+  const store = new Store(root);
+  const app = createApp(store);
+  const boundary = "aside-cover-boundary";
+  const upload = async (name: string, picture: boolean) => {
+    const path = join(root, name);
+    execFileSync("ffmpeg", [
+      "-v", "error",
+      "-f", "lavfi", "-t", "1", "-i", "anullsrc=r=24000:cl=mono",
+      ...(picture
+        ? ["-f", "lavfi", "-i", "color=c=red:s=1200x800:d=1", "-map", "0:a", "-map", "1:v", "-frames:v", "1", "-c:v", "png", "-disposition:v", "attached_pic"]
+        : []),
+      "-c:a", "libmp3lame", "-id3v2_version", "3", path,
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/episodes",
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="${name}"\r\nContent-Type: audio/mpeg\r\n\r\n`,
+        ),
+        await readFile(path),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]),
+    });
+    assert.equal(res.statusCode, 201, res.body);
+    return res.json();
+  };
+  try {
+    const withCover = await upload("cover.mp3", true);
+    assert.equal(withCover.cover, true);
+    const cover = await app.inject(`/api/episodes/${withCover.id}/cover`);
+    assert.equal(cover.statusCode, 200);
+    assert.equal(cover.headers["content-type"], "image/jpeg");
+    const saved = join(root, "served.jpg");
+    await writeFile(saved, cover.rawPayload);
+    assert.equal(
+      execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_name,width,height", "-of", "csv=p=0", saved])
+        .toString()
+        .trim(),
+      "mjpeg,600,400",
+    );
+    const plain = await upload("plain.mp3", false);
+    assert.equal(plain.cover, undefined);
+    assert.equal(
+      (await app.inject(`/api/episodes/${plain.id}/cover`)).statusCode,
+      404,
+    );
   } finally {
     await app.close();
     store.close();

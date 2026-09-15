@@ -7,6 +7,8 @@ import type { Env } from "./env.js";
 export interface Manifest {
   durationMs: number;
   mimeType: string;
+  /** Embedded artwork was extracted; absent in manifests written before covers. */
+  cover?: boolean;
   pauses: { startMs: number; endMs: number }[];
   plan: { offsetMs: number; durationMs: number }[];
 }
@@ -16,6 +18,7 @@ export interface Steps {
 export interface MediaProcessor {
   prepare(id: string): Promise<Manifest>;
   chunk(id: string, index: number): Promise<Uint8Array>;
+  cover(id: string): Promise<Uint8Array | undefined>;
   cleanup(id: string): Promise<void>;
 }
 /** Step outputs are keys; structured records live in D1, audio bytes in R2. */
@@ -60,11 +63,32 @@ export async function analyzeEpisode(
       return key;
     });
     const manifest = await read<Manifest>(`${prefix}/manifest.json`);
+    const coverKey = `episodes/${id}/cover.jpg`;
+    if (manifest.cover)
+      await step.do("cover", async () => {
+        if (!(await env.AUDIO.head(coverKey))) {
+          let bytes: Uint8Array | undefined;
+          try {
+            bytes = await media.cover(id);
+          } catch {
+            // Artwork is decorative; losing it must not fail the analysis.
+          }
+          await store.row(id);
+          if (bytes)
+            await env.AUDIO.put(coverKey, bytes, {
+              httpMetadata: { contentType: "image/jpeg" },
+            });
+        }
+        return coverKey;
+      });
     {
       const row = await store.row(id);
       const episode = JSON.parse(row.metadata) as Episode;
       await store.update({
         ...episode,
+        ...(manifest.cover && (await env.AUDIO.head(coverKey))
+          ? { cover: true }
+          : {}),
         durationMs: manifest.durationMs,
         mimeType: manifest.mimeType,
         stage: "正在自动分析",

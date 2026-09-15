@@ -26,6 +26,7 @@ export class TestMedia extends DurableObject {
       return Response.json({
         durationMs: 1000,
         mimeType: "audio/mpeg",
+        cover: true,
         pauses: [],
         plan: [{ offsetMs: 0, durationMs: 1000 }],
       });
@@ -34,6 +35,11 @@ export class TestMedia extends DurableObject {
       if (!(await this.ctx.storage.get("ready")))
         return new Response(null, { status: 409 });
       return new Response("encoded audio");
+    }
+    if (url.pathname === "/cover") {
+      if (!(await this.ctx.storage.get("ready")))
+        return new Response(null, { status: 409 });
+      return new Response("jpeg bytes");
     }
     await this.ctx.storage.deleteAll();
     return Response.json({ ok: true });

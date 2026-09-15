@@ -52,6 +52,8 @@ export interface Episode {
     excerptEndMs: number;
   };
   mimeType?: string;
+  /** Artwork embedded in the uploaded file, served at `/api/episodes/:id/cover`. */
+  cover?: boolean;
   id: string;
   title: string;
   createdAt: string;

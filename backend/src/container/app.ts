@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { z } from "zod";
 import { MAX_AUDIO_DURATION_MS, MAX_UPLOAD_BYTES } from "@aside/engine/core";
 import { probeAudio } from "../jobs.js";
+import { extractCover } from "../local-media.js";
 import { findSilences, planChunks } from "../media.js";
 const exec = promisify(execFile);
 const idSchema = z.string().uuid();
@@ -54,9 +55,14 @@ export function mediaApp(root: string) {
       // Bound CPU/disk/model work independently of compressed upload size.
       if (metadata.durationMs > MAX_AUDIO_DURATION_MS)
         throw new AdmissionError("单个音频不能超过 5 小时");
+      const cover = await extractCover(
+        join(dir, "original"),
+        join(dir, "cover.jpg"),
+      );
       const pauses = await findSilences(join(dir, "original"));
       const result = {
         ...metadata,
+        cover,
         pauses,
         plan: planChunks(metadata.durationMs, pauses),
       };
@@ -126,6 +132,21 @@ export function mediaApp(root: string) {
       }
     },
   );
+  app.get<{ Querystring: { id: string } }>("/cover", async (req, reply) => {
+    const id = idSchema.parse(req.query.id);
+    let manifest: { cover?: boolean };
+    try {
+      manifest = JSON.parse(
+        await readFile(join(root, id, "manifest.json"), "utf8"),
+      );
+    } catch {
+      return reply.code(409).send({ error: "Rehydrate source" });
+    }
+    if (!manifest.cover) return reply.code(404).send({ error: "No cover" });
+    return reply
+      .type("image/jpeg")
+      .send(await readFile(join(root, id, "cover.jpg")));
+  });
   app.delete<{ Querystring: { id: string } }>("/source", async (req, reply) => {
     const id = idSchema.parse(req.query.id);
     if (busy) return reply.code(429).send({ error: "Media processor busy" });

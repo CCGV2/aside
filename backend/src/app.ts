@@ -65,20 +65,26 @@ export function createApp(store: Store, services?: BackendServices) {
     if (!file) throw Error("请选择音频文件");
     const id = crypto.randomUUID();
     const key = `episodes/${id}/original`;
+    const coverKey = `episodes/${id}/cover.jpg`;
     try {
       await store.objects.put(key, file.file);
       if (file.file.truncated) throw Error("音频超过 500 MB");
-      const { durationMs, mimeType } = await withMedia(
+      const { durationMs, mimeType, cover } = await withMedia(
         store.objects,
         key,
-        (media) => media.probe(),
+        async (media) => ({
+          ...(await media.probe()),
+          cover: await media.cover(),
+        }),
       );
+      if (cover) await store.objects.put(coverKey, [cover]);
       const e: Episode = {
         id,
         title: file.filename.replace(/\.[^.]+$/, "").slice(0, 200),
         createdAt: new Date().toISOString(),
         durationMs,
         mimeType,
+        ...(cover ? { cover: true } : {}),
         status: "queued",
         stage: "等待分析",
         progress: 0,
@@ -88,6 +94,7 @@ export function createApp(store: Store, services?: BackendServices) {
       return reply.code(201).send(e);
     } catch (err) {
       store.objects.delete(key);
+      store.objects.delete(coverKey);
       throw err;
     }
   });
@@ -144,6 +151,19 @@ export function createApp(store: Store, services?: BackendServices) {
       }
       return reply
         .header("Content-Length", size)
+        .send(Readable.from(store.objects.read(key)));
+    },
+  );
+  app.get<{ Params: { id: string } }>(
+    "/api/episodes/:id/cover",
+    async (req, reply) => {
+      get(req.params.id);
+      const key = `episodes/${req.params.id}/cover.jpg`;
+      const object = store.objects.head(key);
+      if (!object) return reply.code(404).send({ error: "封面不存在" });
+      return reply
+        .type("image/jpeg")
+        .header("Content-Length", object.size)
         .send(Readable.from(store.objects.read(key)));
     },
   );
